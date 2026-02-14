@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "autorun": {
+      "command": "node",
+      "args": ["/home/kenny/Projects/sample/aidlc/mcp/autorun/index.js"],
+      "env": {
+        "JIRA_EMAIL": "${JIRA_EMAIL}",
+        "JIRA_TOKEN": "${JIRA_TOKEN}",
+        "GITLAB_TOKEN": "${GITLAB_TOKEN}",
+        "GITLAB_RO_TOKEN": "${GITLAB_RO_TOKEN}"
+      }
+    }
+  }
+}
