@@ -120,6 +120,63 @@ class DatabaseModel {
     return stmt.all();
   }
   
+  upsertTaskDefinition(taskDef) {
+    const stmt = this.db.prepare(`
+      INSERT INTO task_definitions (id, name, file_path, last_updated)
+      VALUES (?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET
+        name = excluded.name,
+        file_path = excluded.file_path,
+        last_updated = excluded.last_updated
+    `);
+    
+    stmt.run(
+      taskDef.id,
+      taskDef.name,
+      taskDef.file_path,
+      taskDef.last_updated
+    );
+  }
+  
+  insertDAGExecution(execution) {
+    const stmt = this.db.prepare(`
+      INSERT INTO dag_executions 
+      (started_at, status, triggered_by, total_tasks, completed_tasks, failed_tasks)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `);
+    
+    const result = stmt.run(
+      execution.started_at,
+      execution.status,
+      execution.triggered_by,
+      execution.total_tasks,
+      execution.completed_tasks || 0,
+      execution.failed_tasks || 0
+    );
+    
+    return result.lastInsertRowid;
+  }
+  
+  updateDAGExecution(id, updates) {
+    const fields = Object.keys(updates).map(k => `${k} = ?`).join(', ');
+    const values = Object.values(updates);
+    
+    const stmt = this.db.prepare(`
+      UPDATE dag_executions SET ${fields} WHERE id = ?
+    `);
+    
+    stmt.run(...values, id);
+  }
+  
+  getExecutionsByDate(date) {
+    const stmt = this.db.prepare(`
+      SELECT * FROM task_executions 
+      WHERE DATE(started_at) = DATE(?)
+      ORDER BY started_at DESC
+    `);
+    return stmt.all(date);
+  }
+  
   async close() {
     if (this.db) {
       this.db.close();

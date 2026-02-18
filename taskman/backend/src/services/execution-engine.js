@@ -6,14 +6,15 @@ class ExecutionEngine {
     this.failed = new Set();
   }
   
-  async executeDAG(graph, dagExecutionId) {
+  async executeDAG(graph, dagExecutionId, onStart, onComplete) {
     const readyQueue = this.getReadyTasks(graph);
+    const results = [];
     
     while (readyQueue.length > 0 || this.running.size > 0) {
       // Fill up to max concurrent
       while (readyQueue.length > 0 && this.running.size < this.maxConcurrent) {
         const taskId = readyQueue.shift();
-        this.startTask(taskId, graph, dagExecutionId);
+        this.startTask(taskId, graph, dagExecutionId, onStart, onComplete, results);
       }
       
       // Wait for at least one task to complete
@@ -25,6 +26,8 @@ class ExecutionEngine {
       const newReady = this.getReadyTasks(graph);
       readyQueue.push(...newReady);
     }
+    
+    return results;
   }
   
   getReadyTasks(graph) {
@@ -73,30 +76,60 @@ class ExecutionEngine {
     return satisfied;
   }
   
-  startTask(taskId, graph, dagExecutionId) {
+  startTask(taskId, graph, dagExecutionId, onStart, onComplete, results) {
     const node = graph.nodes.get(taskId);
     const task = node.config;
     
-    const promise = this.executeTask(taskId, task, dagExecutionId)
-      .then(() => {
+    const promise = (async () => {
+      let executionId;
+      
+      try {
+        // Call onStart callback if provided
+        if (onStart) {
+          executionId = await onStart(task);
+        }
+        
+        const result = await this.executeTask(task);
+        
+        // Call onComplete callback if provided
+        if (onComplete) {
+          await onComplete(task, executionId, result, 'success');
+        }
+        
         this.completed.add(taskId);
         this.running.delete(taskId);
-      })
-      .catch((error) => {
+        
+        results.push({ taskId, status: 'success', result });
+      } catch (error) {
+        // Call onComplete callback if provided
+        if (onComplete) {
+          await onComplete(task, executionId, { stderr: error?.message }, 'failed');
+        }
+        
         if (task.continue_on_failure) {
           this.completed.add(taskId);
         } else {
           this.failed.add(taskId);
         }
         this.running.delete(taskId);
-      });
+        
+        results.push({ taskId, status: 'failed', error: error?.message });
+      }
+    })();
     
     this.running.set(taskId, promise);
   }
   
-  async executeTask(taskId, task, dagExecutionId) {
-    // Override this method in tests or subclasses
-    throw new Error('executeTask must be implemented');
+  async executeTask(task) {
+    // Simple implementation - can be overridden
+    const KiroWrapper = require('./kiro-wrapper');
+    const wrapper = new KiroWrapper();
+    
+    return wrapper.executeCommand({
+      command: task.command,
+      workdir: task.workdir || process.cwd(),
+      timeout: task.timeout || 1800
+    });
   }
 }
 

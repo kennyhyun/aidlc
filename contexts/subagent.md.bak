@@ -1,0 +1,19 @@
+
+## Using subagent
+
+For some reason, subagent is not allowed for more than 1 minute.
+
+when it timed out,
+
+1. try to find the log in the aidlc/subagents/{role}/data/history/{date}.log
+1. Check if the log file line count is increasing every 1 second using shell commands
+1. Wait until the log file stops growing (no change for 3+ seconds)
+1. And find Summary at aidlc/subagents/{role}/data/history/{date}.summary.md file
+1. Continue the conversation based on that summary
+
+Example commands:
+- Monitor until stable like following:
+```
+bash -c 'prev=0; for i in {1..15}; do curr=$(wc -l < aidlc/subagents/test/data/history/2026-02-09T01-23-57-368Z.log 2>/dev/null || echo 0); echo "Check $i: $curr lines"; sleep 5; [ "$curr" -eq "$prev" ] && echo "Stable at $curr lines" && break; prev=$curr; done'
+```
+

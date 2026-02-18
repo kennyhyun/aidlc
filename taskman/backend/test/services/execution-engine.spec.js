@@ -5,9 +5,9 @@ describe('ExecutionEngine', () => {
   test('should respect concurrency limit', async () => {
     const engine = new ExecutionEngine(2); // max 2 concurrent
     const tasks = [
-      { id: 'task1', name: 'Task 1', needs: [] },
-      { id: 'task2', name: 'Task 2', needs: [] },
-      { id: 'task3', name: 'Task 3', needs: [] }
+      { id: 'task1', name: 'Task 1', needs: [], command: 'echo 1' },
+      { id: 'task2', name: 'Task 2', needs: [], command: 'echo 2' },
+      { id: 'task3', name: 'Task 3', needs: [], command: 'echo 3' }
     ];
     
     const dagEngine = new DAGEngine();
@@ -21,7 +21,7 @@ describe('ExecutionEngine', () => {
       maxConcurrent = Math.max(maxConcurrent, concurrent);
       await new Promise(resolve => setTimeout(resolve, 100));
       concurrent--;
-      return { code: 0, stdout: '', stderr: '' };
+      return { code: 0, stdout: '', stderr: '', duration: 1 };
     };
     
     engine.executeTask = mockExecute;
@@ -35,18 +35,18 @@ describe('ExecutionEngine', () => {
     const executionOrder = [];
     
     const tasks = [
-      { id: 'build', name: 'Build', needs: [] },
-      { id: 'test', name: 'Test', needs: ['build'] },
-      { id: 'deploy', name: 'Deploy', needs: ['build', 'test'] }
+      { id: 'build', name: 'Build', needs: [], command: 'echo build' },
+      { id: 'test', name: 'Test', needs: ['build'], command: 'echo test' },
+      { id: 'deploy', name: 'Deploy', needs: ['build', 'test'], command: 'echo deploy' }
     ];
     
     const dagEngine = new DAGEngine();
     const graph = dagEngine.buildGraph(tasks);
     
-    const mockExecute = async (taskId) => {
-      executionOrder.push(taskId);
+    const mockExecute = async (task) => {
+      executionOrder.push(task.id);
       await new Promise(resolve => setTimeout(resolve, 50));
-      return { code: 0, stdout: '', stderr: '' };
+      return { code: 0, stdout: '', stderr: '', duration: 1 };
     };
     
     engine.executeTask = mockExecute;
