@@ -14,7 +14,9 @@
   },
   "jest": {
     "testEnvironment": "node",
-    "coveragePathIgnorePatterns": ["/node_modules/"]
+    "coveragePathIgnorePatterns": [
+      "/node_modules/"
+    ]
   },
   "repository": {
     "type": "git",
@@ -29,6 +31,7 @@
     "@slack/bolt": "^4.6.0",
     "better-sqlite3": "^12.6.2",
     "chokidar": "^5.0.0",
+    "dotenv": "^17.3.1",
     "fastify": "^5.7.4",
     "js-yaml": "^4.1.1",
     "lodash.debounce": "^4.0.8",
