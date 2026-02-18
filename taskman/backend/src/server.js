@@ -9,6 +9,7 @@ const fastify = require('fastify')({
 
 const config = require('./config');
 const TaskManager = require('./services/task-manager');
+const MessagingService = require('./services/messaging-service');
 
 // Register Swagger
 fastify.register(require('@fastify/swagger'), {
@@ -36,8 +37,10 @@ fastify.get('/health', async (request, reply) => {
 
 // Initialize TaskManager
 const taskManager = new TaskManager();
+const messagingService = new MessagingService();
 
 fastify.decorate('taskManager', taskManager);
+fastify.decorate('messagingService', messagingService);
 
 fastify.addHook('onReady', async () => {
   await taskManager.initialize(config);
@@ -45,11 +48,80 @@ fastify.addHook('onReady', async () => {
   
   const tasks = taskManager.getAllTasks();
   fastify.log.info(`Loaded ${tasks.length} tasks`);
+  
+  // Initialize messaging service if configured
+  if (config.messaging.platform && config.messaging.telegram.token) {
+    await messagingService.initialize(config.messaging);
+    fastify.log.info(`Messaging service initialized with ${config.messaging.platform}`);
+    
+    // Setup event listeners
+    taskManager.on('task:started', (data) => {
+      messagingService.notifyTaskStarted(data.taskId, data.taskName, data.executionId);
+    });
+    
+    taskManager.on('task:completed', (data) => {
+      messagingService.notifyTaskCompleted(data.taskId, data.taskName, data.executionId, data.duration);
+    });
+    
+    taskManager.on('task:failed', (data) => {
+      messagingService.notifyTaskFailed(data.taskId, data.taskName, data.executionId, data.error);
+    });
+    
+    // Setup custom message handler for natural language
+    messagingService.onMessage(async (chatId, text, userId) => {
+      const tasks = taskManager.getAllTasks();
+      const running = taskManager.getRunningTasks();
+      
+      // Simple keyword matching for demo
+      if (text.includes('상태') || text.includes('status')) {
+        if (running.length === 0) {
+          await messagingService.sendMessage(chatId, '✅ 실행 중인 태스크가 없습니다.');
+        } else {
+          const status = running.map(t => 
+            `⏳ ${t.task_name} (${t.task_id})\n   시작: ${t.started_at}`
+          ).join('\n\n');
+          await messagingService.sendMessage(chatId, `📊 실행 중인 태스크:\n\n${status}`);
+        }
+      } else if (text.includes('목록') || text.includes('list')) {
+        const list = tasks.map(t => `• ${t.name} (${t.id})`).join('\n');
+        await messagingService.sendMessage(chatId, `📋 사용 가능한 태스크:\n\n${list}`);
+      } else if (text.includes('실행') || text.includes('run')) {
+        // Extract task name from message
+        const taskName = text.replace(/실행|run/gi, '').trim();
+        const task = tasks.find(t => 
+          t.name.toLowerCase().includes(taskName.toLowerCase()) ||
+          t.id.includes(taskName)
+        );
+        
+        if (task) {
+          try {
+            const result = await taskManager.executeTask(task.id, 'telegram');
+            await messagingService.sendMessage(
+              chatId,
+              `▶️ 태스크 시작: ${task.name}\n실행 ID: ${result.id}`
+            );
+          } catch (error) {
+            await messagingService.sendMessage(chatId, `❌ 오류: ${error?.message}`);
+          }
+        } else {
+          await messagingService.sendMessage(chatId, '❓ 태스크를 찾을 수 없습니다.');
+        }
+      } else {
+        await messagingService.sendMessage(
+          chatId,
+          '사용 가능한 명령:\n• "상태" - 실행 중인 태스크 확인\n• "목록" - 태스크 목록\n• "실행 [태스크명]" - 태스크 실행\n• /help - 도움말'
+        );
+      }
+    });
+  } else {
+    fastify.log.info('Messaging service not configured');
+  }
 });
 
 fastify.addHook('onClose', async () => {
+  await messagingService.stop();
   await taskManager.close();
-  fastify.log.info('TaskManager closed');
+  fastify.log.info('Services closed');
 });
 
 // Register routes
