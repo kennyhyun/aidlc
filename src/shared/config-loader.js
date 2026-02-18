@@ -60,6 +60,50 @@ class ConfigLoader {
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-+|-+$/g, '');
   }
+  
+  resolveReferences(tasks) {
+    return tasks.map(task => {
+      if (!task.needs || task.needs.length === 0) {
+        return task;
+      }
+      
+      const resolvedNeeds = task.needs.map(ref => this.resolveTaskId(ref, tasks));
+      
+      return {
+        ...task,
+        needs: resolvedNeeds
+      };
+    });
+  }
+  
+  resolveTaskId(reference, allTasks) {
+    // 1. If already a complete ID (ends with -XXXX), validate and use as-is
+    if (/^[\w-]+-[0-9a-f]{4}$/.test(reference)) {
+      const task = allTasks.find(t => t.id === reference);
+      if (!task) {
+        throw new Error(`Task not found: ${reference}`);
+      }
+      return reference;
+    }
+    
+    // 2. Slugify the reference
+    const slug = this.slugify(reference);
+    
+    // 3. Find tasks starting with the slug
+    const matches = allTasks.filter(t => t.id.startsWith(slug + '-'));
+    
+    if (matches.length === 0) {
+      throw new Error(`Task not found: ${reference}`);
+    } else if (matches.length === 1) {
+      return matches[0].id;
+    } else {
+      // Ambiguous reference
+      const matchList = matches.map(m => `  - ${m.id} (${m.name})`).join('\n');
+      throw new Error(
+        `Ambiguous reference "${reference}". Multiple matches found:\n${matchList}\nPlease use full ID in needs`
+      );
+    }
+  }
 }
 
 module.exports = ConfigLoader;
