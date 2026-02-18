@@ -30,13 +30,31 @@ class KiroWrapper {
     });
   }
   
-  async chat(message, options = {}) {
-    const command = `kiro chat "${message}"`;
-    return this.executeCommand({
-      command,
-      workdir: options.workdir || process.cwd(),
-      timeout: options.timeout || 1800
-    });
+  async chat(message, context = {}) {
+    // Build context string for Kiro
+    const contextStr = JSON.stringify(context, null, 2);
+    
+    // Escape quotes in message
+    const escapedMessage = message.replace(/'/g, "'\\''");
+    
+    // Create a prompt with context
+    const prompt = `Context:\n${contextStr}\n\nUser message: ${message}\n\nPlease help the user with their task management request.`;
+    
+    try {
+      const result = await this.executeCommand({
+        command: `kiro chat '${escapedMessage}'`,
+        workdir: process.cwd(),
+        timeout: 60
+      });
+      
+      if (result.code === 0) {
+        return result.stdout.trim();
+      } else {
+        throw new Error(result.stderr || 'Kiro chat failed');
+      }
+    } catch (error) {
+      throw new Error(`Kiro chat error: ${error?.message}`);
+    }
   }
 }
 
