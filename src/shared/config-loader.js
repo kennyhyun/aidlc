@@ -104,6 +104,30 @@ class ConfigLoader {
       );
     }
   }
+  
+  async autoCorrectYaml(filePath) {
+    const content = await fs.readFile(filePath, 'utf8');
+    const data = yaml.load(content);
+    
+    if (!data || !data.tasks) {
+      return;
+    }
+    
+    // Generate IDs for tasks without them
+    data.tasks.forEach(task => {
+      if (!task.id) {
+        task.id = this.generateTaskId(task.name);
+      }
+    });
+    
+    // Write back
+    const newContent = yaml.dump(data, {
+      lineWidth: -1,
+      noRefs: true
+    });
+    
+    await fs.writeFile(filePath, newContent, 'utf8');
+  }
 }
 
 module.exports = ConfigLoader;
