@@ -10,12 +10,12 @@ class ConfigLoader {
   
   async loadTasks() {
     const files = await this.getYamlFiles();
-    const allTasks = [];
     
-    for (const file of files) {
+    const allTasks = await files.reduce(async (accPromise, file) => {
+      const acc = await accPromise;
       const tasks = await this.loadTasksFromFile(file);
-      allTasks.push(...tasks);
-    }
+      return [...acc, ...tasks];
+    }, Promise.resolve([]));
     
     // Generate IDs for tasks without them
     allTasks.forEach(task => {
