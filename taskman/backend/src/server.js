@@ -8,15 +8,15 @@ const fastify = require('fastify')({
 });
 
 const config = require('./config');
-const Database = require('./models/database');
+const TaskManager = require('./services/task-manager');
 
 // Register Swagger
 fastify.register(require('@fastify/swagger'), {
   openapi: {
     info: {
-      title: 'AIDLC API',
+      title: 'TaskMan API',
       version: '1.0.0',
-      description: 'AI Development Lifecycle Controller API'
+      description: 'Task Manager API for AI Development Lifecycle'
     }
   }
 });
@@ -34,21 +34,29 @@ fastify.get('/health', async (request, reply) => {
   };
 });
 
-// Initialize database
-let db;
+// Initialize TaskManager
+const taskManager = new TaskManager();
+
+fastify.decorate('taskManager', taskManager);
 
 fastify.addHook('onReady', async () => {
-  db = new Database(config.database.path);
-  await db.initialize();
-  fastify.log.info('Database initialized');
+  await taskManager.initialize(config);
+  fastify.log.info('TaskManager initialized');
+  
+  const tasks = taskManager.getAllTasks();
+  fastify.log.info(`Loaded ${tasks.length} tasks`);
 });
 
 fastify.addHook('onClose', async () => {
-  if (db) {
-    await db.close();
-    fastify.log.info('Database closed');
-  }
+  await taskManager.close();
+  fastify.log.info('TaskManager closed');
 });
+
+// Register routes
+fastify.register(require('./routes/tasks'));
+fastify.register(require('./routes/executions'));
+fastify.register(require('./routes/cron'));
+fastify.register(require('./routes/reports'));
 
 // Start server
 const start = async () => {

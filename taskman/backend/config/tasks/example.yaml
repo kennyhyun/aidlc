@@ -1,0 +1,19 @@
+tasks:
+  - id: hello-world-a1b2
+    name: "Hello World"
+    command: "echo 'Hello from TaskMan!'"
+    workdir: "."
+    timeout: 10
+    
+  - id: list-files-c3d4
+    name: "List Files"
+    command: "ls -la"
+    workdir: "."
+    timeout: 10
+    
+  - id: date-time-e5f6
+    name: "Show Date"
+    command: "date"
+    workdir: "."
+    timeout: 10
+    needs: ["hello-world-a1b2"]
