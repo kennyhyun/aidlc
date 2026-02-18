@@ -9,14 +9,20 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
-    "test": "jest",
-    "test:watch": "jest --watch"
+    "test": "jest test/ --coverage",
+    "test:watch": "jest test/ --watch"
   },
   "jest": {
     "testEnvironment": "node",
+    "testMatch": ["**/test/**/*.spec.js"],
+    "collectCoverageFrom": [
+      "src/**/*.js",
+      "!src/server.js"
+    ],
     "coveragePathIgnorePatterns": [
       "/node_modules/"
-    ]
+    ],
+    "coverageReporters": ["text", "lcov", "html"]
   },
   "repository": {
     "type": "git",
