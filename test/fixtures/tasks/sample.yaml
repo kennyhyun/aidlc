@@ -1,0 +1,10 @@
+tasks:
+  - name: "Build Backend"
+    command: "kiro chat 'Build backend'"
+    workdir: "/storage/project"
+    timeout: 1800
+    
+  - name: "Run Tests"
+    needs: ["Build Backend"]
+    command: "kiro chat 'Run tests'"
+    timeout: 600
