@@ -69,36 +69,74 @@ fastify.addHook('onReady', async () => {
     
     // Setup custom message handler for natural language
     messagingService.onMessage(async (chatId, text, userId) => {
-      const tasks = taskManager.getAllTasks();
-      const running = taskManager.getRunningTasks();
-      
-      // Build context for LLM
-      const context = {
-        available_tasks: tasks.map(t => ({
-          id: t.id,
-          name: t.name,
-          command: t.command,
-          needs: t.needs || []
-        })),
-        running_tasks: running.map(t => ({
-          id: t.id,
-          task_id: t.task_id,
-          task_name: t.task_name,
-          started_at: t.started_at
-        })),
-        api_base_url: `http://localhost:${config.port}/api`
-      };
-      
       try {
+        fastify.log.debug(`Received message from ${userId}: ${text}`);
+        
+        // Send typing indicator
+        fastify.log.debug('Sending typing indicator...');
+        await messagingService.sendTyping(chatId);
+        fastify.log.debug('Typing indicator sent');
+        
+        const tasks = taskManager.getAllTasks();
+        const running = taskManager.getRunningTasks();
+        
+        fastify.log.debug(`Available tasks: ${tasks.length}, Running tasks: ${running.length}`);
+        
+        // Build context for LLM
+        const context = {
+          available_tasks: tasks.map(t => ({
+            id: t.id,
+            name: t.name,
+            command: t.command,
+            needs: t.needs || []
+          })),
+          running_tasks: running.map(t => ({
+            id: t.id,
+            task_id: t.task_id,
+            task_name: t.task_name,
+            started_at: t.started_at
+          })),
+          api_base_url: `http://localhost:${config.port}/api`
+        };
+        
+        fastify.log.debug('Context built, initializing Kiro CLI...');
+        
         // Use Kiro CLI for natural language understanding
         const KiroWrapper = require('./services/kiro-wrapper');
         const kiro = new KiroWrapper();
         
+        fastify.log.debug('Calling Kiro CLI chat...');
         const response = await kiro.chat(text, context);
         
+        fastify.log.debug(`Got response from Kiro CLI (${response.length} chars)`);
+        
+        // Check if response is a JSON action
+        try {
+          const jsonMatch = response.match(/\{[^}]*"action"[^}]*\}/);
+          if (jsonMatch) {
+            const action = JSON.parse(jsonMatch[0]);
+            if (action.action === 'execute' && action.task_id) {
+              fastify.log.info(`Executing task: ${action.task_id}`);
+              
+              const result = await taskManager.executeTask(action.task_id, 'telegram');
+              await messagingService.sendMessage(
+                chatId,
+                `▶️ 태스크 시작: ${action.task_id}\n실행 ID: ${result.id}`
+              );
+              fastify.log.info('Task execution initiated');
+              return;
+            }
+          }
+        } catch (parseError) {
+          fastify.log.debug('Response is not a JSON action, sending as text');
+        }
+        
+        // Send response as text
         await messagingService.sendMessage(chatId, response);
+        fastify.log.info('Message sent successfully');
       } catch (error) {
-        fastify.log.error('LLM processing error:', error?.message);
+        fastify.log.error(`Error in message handler: ${error?.message}`);
+        fastify.log.error(`Stack: ${error?.stack}`);
         
         // Fallback to simple keyword matching
         if (text.includes('상태') || text.includes('status')) {

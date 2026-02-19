@@ -231,6 +231,10 @@ You can also use natural language:
     return this.adapter.sendMessage(chatId, text, options);
   }
   
+  async sendTyping(chatId) {
+    return this.adapter.sendTyping(chatId);
+  }
+  
   async stop() {
     if (this.adapter) {
       await this.adapter.stop();
