@@ -76,7 +76,7 @@ class MessagingService {
     
     // 3. Natural language - delegate to custom handler
     if (this.messageHandler) {
-      await this.adapter.sendTyping(chatId);
+      // Note: Custom handler is responsible for sending typing indicator
       return await this.messageHandler(chatId, text, userId);
     }
     
