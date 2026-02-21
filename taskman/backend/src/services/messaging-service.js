@@ -1,5 +1,6 @@
 const TelegramAdapter = require('./messaging/telegram-adapter');
 const SlackAdapter = require('./messaging/slack-adapter');
+const logger = require('pino')({ level: process.env.LOG_LEVEL || 'info' });
 
 class MessagingService {
   constructor() {
@@ -10,22 +11,22 @@ class MessagingService {
   }
   
   async initialize(config) {
-    console.log('[MessagingService] Initializing...');
-    console.log('[MessagingService] Platform:', config.platform);
+    logger.debug('Initializing messaging service...');
+    logger.debug(`Platform: ${config.platform}`);
     
     this.platform = config.platform || 'telegram';
     
     if (this.platform === 'telegram') {
-      console.log('[MessagingService] Creating Telegram adapter...');
+      logger.debug('Creating Telegram adapter...');
       this.adapter = new TelegramAdapter(
         config.telegram.token,
         config.telegram.chatId
       );
     } else if (this.platform === 'slack') {
-      console.log('[MessagingService] Creating Slack adapter...');
-      console.log('[MessagingService] Bot Token:', config.slack.botToken?.substring(0, 15) + '...');
-      console.log('[MessagingService] App Token:', config.slack.appToken?.substring(0, 15) + '...');
-      console.log('[MessagingService] Channel ID:', config.slack.channelId);
+      logger.debug('Creating Slack adapter...');
+      logger.debug(`Bot Token: ${config.slack.botToken?.substring(0, 15)}...`);
+      logger.debug(`App Token: ${config.slack.appToken?.substring(0, 15)}...`);
+      logger.debug(`Channel ID: ${config.slack.channelId}`);
       
       this.adapter = new SlackAdapter(
         config.slack.botToken,
@@ -36,30 +37,30 @@ class MessagingService {
       throw new Error(`Unsupported messaging platform: ${this.platform}`);
     }
     
-    console.log('[MessagingService] Starting adapter...');
+    logger.debug('Starting adapter...');
     await this.adapter.start();
-    console.log('[MessagingService] ✅ Adapter started');
+    logger.info('Messaging adapter started');
     
     this.registerHandlers();
-    console.log('[MessagingService] ✅ Initialization complete');
+    logger.info('Messaging service initialized');
   }
   
   registerHandlers() {
-    console.log('[MessagingService] Registering handlers...');
+    logger.debug('Registering message handlers...');
     
     // Message handler
     this.adapter.onMessage(async (chatId, text, userId) => {
-      console.log('[MessagingService] 📨 Message received:', { chatId, text, userId });
+      logger.debug({ chatId, text, userId }, 'Message received');
       await this.handleMessage(chatId, text, userId);
     });
     
     // Button click handler
     this.adapter.onButtonClick(async (chatId, action, data, userId) => {
-      console.log('[MessagingService] 🔘 Button clicked:', { chatId, action, data, userId });
+      logger.debug({ chatId, action, data, userId }, 'Button clicked');
       await this.handleButtonClick(chatId, action, data, userId);
     });
     
-    console.log('[MessagingService] ✅ Handlers registered');
+    logger.debug('Message handlers registered');
   }
   
   async handleMessage(chatId, text, userId) {

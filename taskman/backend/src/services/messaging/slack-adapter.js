@@ -1,5 +1,6 @@
 const { App } = require('@slack/bolt');
 const MessagingAdapter = require('./adapter');
+const logger = require('pino')({ level: process.env.LOG_LEVEL || 'info' });
 
 class SlackAdapter extends MessagingAdapter {
   constructor(botToken, appToken, channelId) {
@@ -11,20 +12,20 @@ class SlackAdapter extends MessagingAdapter {
   }
   
   async start() {
-    console.log('[SlackAdapter] Starting Slack app...');
-    console.log('[SlackAdapter] Bot Token:', this.botToken?.substring(0, 15) + '...');
-    console.log('[SlackAdapter] App Token:', this.appToken?.substring(0, 15) + '...');
-    console.log('[SlackAdapter] Default Channel:', this.defaultChannelId);
+    logger.debug('Starting Slack app...');
+    logger.debug(`Bot Token: ${this.botToken?.substring(0, 15)}...`);
+    logger.debug(`App Token: ${this.appToken?.substring(0, 15)}...`);
+    logger.debug(`Default Channel: ${this.defaultChannelId}`);
     
     this.app = new App({
       token: this.botToken,
       socketMode: true,
       appToken: this.appToken,
-      logLevel: 'DEBUG'
+      logLevel: process.env.LOG_LEVEL === 'debug' ? 'DEBUG' : 'ERROR'
     });
     
     await this.app.start();
-    console.log('[SlackAdapter] ✅ Slack app started successfully');
+    logger.info('Slack app started successfully');
   }
   
   async stop() {
@@ -77,16 +78,16 @@ class SlackAdapter extends MessagingAdapter {
   }
   
   async onMessage(handler) {
-    console.log('[SlackAdapter] Registering message handler...');
+    logger.debug('Registering message handler...');
     
     this.app.message(async ({ message }) => {
-      console.log('[SlackAdapter] 📨 Message received:', {
+      logger.debug({
         channel: message.channel,
         user: message.user,
         text: message.text,
         bot_id: message.bot_id,
         channel_type: message.channel_type
-      });
+      }, 'Message received');
       
       const channelId = message.channel;
       const text = message.text;
@@ -94,20 +95,20 @@ class SlackAdapter extends MessagingAdapter {
       
       // Ignore bot messages
       if (message.bot_id) {
-        console.log('[SlackAdapter] Ignoring bot message');
+        logger.debug('Ignoring bot message');
         return;
       }
       
       try {
-        console.log('[SlackAdapter] Calling handler...');
+        logger.debug('Calling message handler...');
         await handler(channelId, text, userId);
-        console.log('[SlackAdapter] ✅ Handler completed');
+        logger.debug('Message handler completed');
       } catch (error) {
-        console.error('[SlackAdapter] ❌ Handler error:', error);
+        logger.error({ err: error }, 'Message handler error');
       }
     });
     
-    console.log('[SlackAdapter] ✅ Message handler registered');
+    logger.debug('Message handler registered');
   }
   
   async onButtonClick(handler) {
