@@ -10,14 +10,23 @@ class MessagingService {
   }
   
   async initialize(config) {
+    console.log('[MessagingService] Initializing...');
+    console.log('[MessagingService] Platform:', config.platform);
+    
     this.platform = config.platform || 'telegram';
     
     if (this.platform === 'telegram') {
+      console.log('[MessagingService] Creating Telegram adapter...');
       this.adapter = new TelegramAdapter(
         config.telegram.token,
         config.telegram.chatId
       );
     } else if (this.platform === 'slack') {
+      console.log('[MessagingService] Creating Slack adapter...');
+      console.log('[MessagingService] Bot Token:', config.slack.botToken?.substring(0, 15) + '...');
+      console.log('[MessagingService] App Token:', config.slack.appToken?.substring(0, 15) + '...');
+      console.log('[MessagingService] Channel ID:', config.slack.channelId);
+      
       this.adapter = new SlackAdapter(
         config.slack.botToken,
         config.slack.appToken,
@@ -27,29 +36,44 @@ class MessagingService {
       throw new Error(`Unsupported messaging platform: ${this.platform}`);
     }
     
+    console.log('[MessagingService] Starting adapter...');
     await this.adapter.start();
+    console.log('[MessagingService] ✅ Adapter started');
+    
     this.registerHandlers();
+    console.log('[MessagingService] ✅ Initialization complete');
   }
   
   registerHandlers() {
+    console.log('[MessagingService] Registering handlers...');
+    
     // Message handler
     this.adapter.onMessage(async (chatId, text, userId) => {
+      console.log('[MessagingService] 📨 Message received:', { chatId, text, userId });
       await this.handleMessage(chatId, text, userId);
     });
     
     // Button click handler
     this.adapter.onButtonClick(async (chatId, action, data, userId) => {
+      console.log('[MessagingService] 🔘 Button clicked:', { chatId, action, data, userId });
       await this.handleButtonClick(chatId, action, data, userId);
     });
+    
+    console.log('[MessagingService] ✅ Handlers registered');
   }
   
   async handleMessage(chatId, text, userId) {
-    // 1. Slash commands - direct execution
-    if (text.startsWith('/')) {
+    // 1. Commands with ! prefix (Slack-friendly)
+    if (text.startsWith('!')) {
       return await this.handleCommand(chatId, text);
     }
     
-    // 2. Natural language - delegate to custom handler
+    // 2. Legacy slash commands for Telegram compatibility
+    if (text.startsWith('/') && this.platform === 'telegram') {
+      return await this.handleCommand(chatId, text);
+    }
+    
+    // 3. Natural language - delegate to custom handler
     if (this.messageHandler) {
       await this.adapter.sendTyping(chatId);
       return await this.messageHandler(chatId, text, userId);
@@ -58,33 +82,35 @@ class MessagingService {
     // Default response
     await this.adapter.sendMessage(
       chatId,
-      '❓ Unknown command. Type /help for available commands.'
+      '❓ Unknown command. Type !help for available commands.'
     );
   }
   
   async handleCommand(chatId, text) {
     const [command, ...args] = text.split(' ');
+    const cmd = command.replace(/^[!/]/, ''); // Remove ! or / prefix
     
     try {
-      switch (command) {
-        case '/status':
+      switch (cmd) {
+        case 'status':
           return await this.cmdStatus(chatId);
-        case '/list':
+        case 'list':
           return await this.cmdList(chatId);
-        case '/run':
+        case 'run':
           return await this.cmdRun(chatId, args[0]);
-        case '/cancel':
+        case 'cancel':
           return await this.cmdCancel(chatId, args[0]);
-        case '/logs':
+        case 'logs':
           return await this.cmdLogs(chatId, args[0]);
-        case '/report':
+        case 'report':
           return await this.cmdReport(chatId);
-        case '/help':
+        case 'help':
           return await this.cmdHelp(chatId);
         default:
+          const prefix = this.platform === 'slack' ? '!' : '/';
           return await this.adapter.sendMessage(
             chatId,
-            '❓ Unknown command. Type /help for available commands.'
+            `❓ Unknown command. Type ${prefix}help for available commands.`
           );
       }
     } catch (error) {
@@ -142,16 +168,17 @@ class MessagingService {
   }
   
   async cmdHelp(chatId) {
+    const prefix = this.platform === 'slack' ? '!' : '/';
     const help = `
 📋 TaskMan Commands
 
-/status - Show running tasks
-/list - List all available tasks
-/run <task-id> - Execute a task
-/cancel <execution-id> - Cancel running task
-/logs <execution-id> - View task logs
-/report - Generate daily report
-/help - Show this help message
+${prefix}status - Show running tasks
+${prefix}list - List all available tasks
+${prefix}run <task-id> - Execute a task
+${prefix}cancel <execution-id> - Cancel running task
+${prefix}logs <execution-id> - View task logs
+${prefix}report - Generate daily report
+${prefix}help - Show this help message
 
 You can also use natural language:
 "빌드 상태 알려줘"

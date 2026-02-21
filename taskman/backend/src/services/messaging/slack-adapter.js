@@ -11,13 +11,20 @@ class SlackAdapter extends MessagingAdapter {
   }
   
   async start() {
+    console.log('[SlackAdapter] Starting Slack app...');
+    console.log('[SlackAdapter] Bot Token:', this.botToken?.substring(0, 15) + '...');
+    console.log('[SlackAdapter] App Token:', this.appToken?.substring(0, 15) + '...');
+    console.log('[SlackAdapter] Default Channel:', this.defaultChannelId);
+    
     this.app = new App({
       token: this.botToken,
       socketMode: true,
-      appToken: this.appToken
+      appToken: this.appToken,
+      logLevel: 'DEBUG'
     });
     
     await this.app.start();
+    console.log('[SlackAdapter] ✅ Slack app started successfully');
   }
   
   async stop() {
@@ -70,20 +77,37 @@ class SlackAdapter extends MessagingAdapter {
   }
   
   async onMessage(handler) {
+    console.log('[SlackAdapter] Registering message handler...');
+    
     this.app.message(async ({ message }) => {
+      console.log('[SlackAdapter] 📨 Message received:', {
+        channel: message.channel,
+        user: message.user,
+        text: message.text,
+        bot_id: message.bot_id,
+        channel_type: message.channel_type
+      });
+      
       const channelId = message.channel;
       const text = message.text;
       const userId = message.user;
       
       // Ignore bot messages
-      if (message.bot_id) return;
+      if (message.bot_id) {
+        console.log('[SlackAdapter] Ignoring bot message');
+        return;
+      }
       
       try {
+        console.log('[SlackAdapter] Calling handler...');
         await handler(channelId, text, userId);
+        console.log('[SlackAdapter] ✅ Handler completed');
       } catch (error) {
-        // Error handling
+        console.error('[SlackAdapter] ❌ Handler error:', error);
       }
     });
+    
+    console.log('[SlackAdapter] ✅ Message handler registered');
   }
   
   async onButtonClick(handler) {

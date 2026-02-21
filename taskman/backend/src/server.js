@@ -50,7 +50,20 @@ fastify.addHook('onReady', async () => {
   fastify.log.info(`Loaded ${tasks.length} tasks`);
   
   // Initialize messaging service if configured
-  if (config.messaging.platform && config.messaging.telegram.token) {
+  console.log('[Server] Checking messaging config...');
+  console.log('[Server] Platform:', config.messaging.platform);
+  console.log('[Server] Slack botToken:', config.messaging.slack.botToken ? 'SET' : 'NOT SET');
+  console.log('[Server] Telegram token:', config.messaging.telegram.token ? 'SET' : 'NOT SET');
+  
+  const hasMessagingConfig = config.messaging.platform && (
+    (config.messaging.platform === 'telegram' && config.messaging.telegram.token) ||
+    (config.messaging.platform === 'slack' && config.messaging.slack.botToken)
+  );
+  
+  console.log('[Server] hasMessagingConfig:', hasMessagingConfig);
+  
+  if (hasMessagingConfig) {
+    console.log('[Server] Initializing messaging service...');
     await messagingService.initialize(config.messaging);
     fastify.log.info(`Messaging service initialized with ${config.messaging.platform}`);
     
