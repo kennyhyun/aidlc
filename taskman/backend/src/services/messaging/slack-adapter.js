@@ -69,12 +69,57 @@ class SlackAdapter extends MessagingAdapter {
   }
   
   async sendTyping(channelId) {
-    // Slack doesn't have a typing indicator in the same way
-    // We can send a temporary message instead
-    return this.app.client.chat.postMessage({
+    // Slack doesn't have a typing indicator
+    // Send a temporary message that can be updated later
+    const result = await this.app.client.chat.postMessage({
       channel: channelId || this.defaultChannelId,
-      text: '🤔 Processing...'
+      text: '⏳ Processing...'
     });
+    
+    // Return message info so it can be updated/deleted later
+    return {
+      channel: result.channel,
+      ts: result.ts,
+      update: async (text, options = {}) => {
+        const { buttons } = options;
+        const blocks = [
+          {
+            type: 'section',
+            text: {
+              type: 'mrkdwn',
+              text
+            }
+          }
+        ];
+        
+        if (buttons && buttons.length > 0) {
+          blocks.push({
+            type: 'actions',
+            elements: buttons.map(btn => ({
+              type: 'button',
+              text: {
+                type: 'plain_text',
+                text: btn.text
+              },
+              action_id: `${btn.action}:${btn.data}`
+            }))
+          });
+        }
+        
+        return this.app.client.chat.update({
+          channel: result.channel,
+          ts: result.ts,
+          text,
+          blocks
+        });
+      },
+      delete: async () => {
+        return this.app.client.chat.delete({
+          channel: result.channel,
+          ts: result.ts
+        });
+      }
+    };
   }
   
   async onMessage(handler) {

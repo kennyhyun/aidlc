@@ -82,12 +82,14 @@ fastify.addHook('onReady', async () => {
     
     // Setup custom message handler for natural language
     messagingService.onMessage(async (chatId, text, userId) => {
+      let typingMessage = null;
+      
       try {
         fastify.log.debug(`Received message from ${userId}: ${text}`);
         
-        // Send typing indicator
+        // Send typing indicator (Slack: temporary message, Telegram: typing action)
         fastify.log.debug('Sending typing indicator...');
-        await messagingService.sendTyping(chatId);
+        typingMessage = await messagingService.sendTyping(chatId);
         fastify.log.debug('Typing indicator sent');
         
         const tasks = taskManager.getAllTasks();
@@ -132,10 +134,15 @@ fastify.addHook('onReady', async () => {
               fastify.log.info(`Executing task: ${action.task_id}`);
               
               const result = await taskManager.executeTask(action.task_id, 'telegram');
-              await messagingService.sendMessage(
-                chatId,
-                `▶️ 태스크 시작: ${action.task_id}\n실행 ID: ${result.id}`
-              );
+              const message = `▶️ 태스크 시작: ${action.task_id}\n실행 ID: ${result.id}`;
+              
+              // Update typing message or send new message
+              if (typingMessage?.update) {
+                await typingMessage.update(message);
+              } else {
+                await messagingService.sendMessage(chatId, message);
+              }
+              
               fastify.log.info('Task execution initiated');
               return;
             }
@@ -144,8 +151,13 @@ fastify.addHook('onReady', async () => {
           fastify.log.debug('Response is not a JSON action, sending as text');
         }
         
-        // Send response as text
-        await messagingService.sendMessage(chatId, response);
+        // Send response as text (update typing message or send new)
+        if (typingMessage?.update) {
+          await typingMessage.update(response);
+        } else {
+          await messagingService.sendMessage(chatId, response);
+        }
+        
         fastify.log.info('Message sent successfully');
       } catch (error) {
         fastify.log.error(`Error in message handler: ${error?.message}`);

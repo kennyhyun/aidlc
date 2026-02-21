@@ -54,7 +54,9 @@ class TelegramAdapter extends MessagingAdapter {
   }
   
   async sendTyping(chatId) {
-    return this.bot.sendChatAction(chatId || this.defaultChatId, 'typing');
+    await this.bot.sendChatAction(chatId || this.defaultChatId, 'typing');
+    // Return null for Telegram (no message to update)
+    return null;
   }
   
   async onMessage(handler) {
