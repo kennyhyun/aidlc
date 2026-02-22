@@ -188,4 +188,21 @@ describe('WorkspaceService', () => {
       }).toThrow('폴더를 찾을 수 없습니다');
     });
   });
+
+  describe('switchToDefault', () => {
+    test('should switch to default workspace', () => {
+      service.setDefaultWorkspace(tempDir);
+      service.switchToDefault();
+      
+      const current = service.getCurrentWorkspace();
+      expect(current).toBeDefined();
+      expect(current.path).toBe(tempDir);
+    });
+
+    test('should throw error when no default workspace', () => {
+      expect(() => {
+        service.switchToDefault();
+      }).toThrow('디폴트 워크스페이스가 설정되지 않았습니다');
+    });
+  });
 });

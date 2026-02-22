@@ -146,6 +146,18 @@ class WorkspaceService {
     logger.info(`Set default workspace: ${dirPath}`);
     return this.getDefaultWorkspace();
   }
+
+  switchToDefault() {
+    const defaultWs = this.getDefaultWorkspace();
+    
+    if (!defaultWs) {
+      const error = new Error('디폴트 워크스페이스가 설정되지 않았습니다');
+      error.code = 'NO_DEFAULT_WORKSPACE';
+      throw error;
+    }
+    
+    return this.switchWorkspace(defaultWs.path);
+  }
 }
 
 module.exports = WorkspaceService;
