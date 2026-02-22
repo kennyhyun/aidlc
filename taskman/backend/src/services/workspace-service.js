@@ -111,6 +111,41 @@ class WorkspaceService {
     logger.info(`Switched to workspace: ${dirPath}`);
     return this.getCurrentWorkspace();
   }
+
+  setDefaultWorkspace(dirPath) {
+    // Validate path
+    this._validatePath(dirPath);
+    
+    // Use transaction
+    const transaction = this.db.db.transaction(() => {
+      // Unset default workspace
+      this.db.db.prepare(`
+        UPDATE workspaces SET is_default = 0 WHERE is_default = 1
+      `).run();
+      
+      // Check if workspace exists
+      const existing = this.db.db.prepare(`
+        SELECT * FROM workspaces WHERE path = ?
+      `).get(dirPath);
+      
+      if (existing) {
+        // Update existing workspace
+        this.db.db.prepare(`
+          UPDATE workspaces SET is_default = 1 WHERE path = ?
+        `).run(dirPath);
+      } else {
+        // Insert new workspace
+        this.db.db.prepare(`
+          INSERT INTO workspaces (path, is_default) VALUES (?, 1)
+        `).run(dirPath);
+      }
+    });
+    
+    transaction();
+    
+    logger.info(`Set default workspace: ${dirPath}`);
+    return this.getDefaultWorkspace();
+  }
 }
 
 module.exports = WorkspaceService;

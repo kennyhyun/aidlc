@@ -153,4 +153,39 @@ describe('WorkspaceService', () => {
       }).toThrow('폴더를 찾을 수 없습니다');
     });
   });
+
+  describe('setDefaultWorkspace', () => {
+    test('should set default workspace', () => {
+      service.setDefaultWorkspace(tempDir);
+      
+      const defaultWs = service.getDefaultWorkspace();
+      expect(defaultWs).toBeDefined();
+      expect(defaultWs.path).toBe(tempDir);
+    });
+
+    test('should unset previous default workspace', async () => {
+      const dir1 = await fs.mkdtemp(path.join(os.tmpdir(), 'ws1-'));
+      const dir2 = await fs.mkdtemp(path.join(os.tmpdir(), 'ws2-'));
+      
+      try {
+        service.setDefaultWorkspace(dir1);
+        service.setDefaultWorkspace(dir2);
+        
+        const allWorkspaces = db.db.prepare('SELECT * FROM workspaces').all();
+        const defaultCount = allWorkspaces.filter(w => w.is_default === 1).length;
+        
+        expect(defaultCount).toBe(1);
+        expect(service.getDefaultWorkspace().path).toBe(dir2);
+      } finally {
+        await fs.rm(dir1, { recursive: true, force: true });
+        await fs.rm(dir2, { recursive: true, force: true });
+      }
+    });
+
+    test('should throw error for non-existent path', () => {
+      expect(() => {
+        service.setDefaultWorkspace('/non/existent/path');
+      }).toThrow('폴더를 찾을 수 없습니다');
+    });
+  });
 });
