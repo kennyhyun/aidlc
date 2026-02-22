@@ -158,6 +158,101 @@ class WorkspaceService {
     
     return this.switchWorkspace(defaultWs.path);
   }
+
+  listWorkspaces(limit = 10) {
+    const stmt = this.db.db.prepare(`
+      SELECT * FROM workspaces 
+      ORDER BY last_accessed_at DESC 
+      LIMIT ?
+    `);
+    
+    return stmt.all(limit);
+  }
+
+  _findExistingTaskWorkdir() {
+    if (!this.taskManager) {
+      return null;
+    }
+    
+    const tasks = this.taskManager.getAllTasks();
+    
+    for (const task of tasks) {
+      if (!task.workdir) {
+        continue;
+      }
+      
+      try {
+        if (fs.existsSync(task.workdir) && fs.statSync(task.workdir).isDirectory()) {
+          return task.workdir;
+        }
+      } catch (error) {
+        // Skip invalid paths
+        continue;
+      }
+    }
+    
+    return null;
+  }
+
+  ensureDefaultWorkspace() {
+    // Check if default exists and is valid
+    const defaultWs = this.getDefaultWorkspace();
+    if (defaultWs) {
+      logger.debug('Default workspace already exists');
+      return defaultWs;
+    }
+    
+    logger.info('No default workspace found, initializing...');
+    
+    // Try current workspace
+    const currentWs = this.getCurrentWorkspace();
+    if (currentWs) {
+      logger.info(`Setting current workspace as default: ${currentWs.path}`);
+      this.setDefaultWorkspace(currentWs.path);
+      return this.getDefaultWorkspace();
+    }
+    
+    // Try task workdir
+    const taskWorkdir = this._findExistingTaskWorkdir();
+    if (taskWorkdir) {
+      logger.info(`Setting task workdir as default: ${taskWorkdir}`);
+      this.setDefaultWorkspace(taskWorkdir);
+      return this.getDefaultWorkspace();
+    }
+    
+    // Use process.cwd() as last resort
+    const cwd = process.cwd();
+    logger.info(`Setting process.cwd() as default: ${cwd}`);
+    this.setDefaultWorkspace(cwd);
+    return this.getDefaultWorkspace();
+  }
+
+  getWorkdirForKiro() {
+    // Try current workspace
+    const currentWs = this.getCurrentWorkspace();
+    if (currentWs) {
+      return currentWs.path;
+    }
+    
+    // Try default workspace
+    const defaultWs = this.getDefaultWorkspace();
+    if (defaultWs) {
+      return defaultWs.path;
+    }
+    
+    // Ensure default exists and return it
+    const ensuredDefault = this.ensureDefaultWorkspace();
+    return ensuredDefault.path;
+  }
+
+  deleteWorkspace(id) {
+    const stmt = this.db.db.prepare(`
+      DELETE FROM workspaces WHERE id = ?
+    `);
+    
+    stmt.run(id);
+    logger.info(`Deleted workspace: ${id}`);
+  }
 }
 
 module.exports = WorkspaceService;

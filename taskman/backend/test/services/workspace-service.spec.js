@@ -205,4 +205,208 @@ describe('WorkspaceService', () => {
       }).toThrow('디폴트 워크스페이스가 설정되지 않았습니다');
     });
   });
+
+  describe('listWorkspaces', () => {
+    test('should return empty array when no workspaces', () => {
+      const result = service.listWorkspaces();
+      expect(result).toEqual([]);
+    });
+
+    test('should return workspaces ordered by last_accessed_at', async () => {
+      const dir1 = await fs.mkdtemp(path.join(os.tmpdir(), 'ws1-'));
+      const dir2 = await fs.mkdtemp(path.join(os.tmpdir(), 'ws2-'));
+      const dir3 = await fs.mkdtemp(path.join(os.tmpdir(), 'ws3-'));
+      
+      try {
+        service.switchWorkspace(dir1);
+        service.switchWorkspace(dir2);
+        service.switchWorkspace(dir3);
+        
+        const result = service.listWorkspaces();
+        expect(result).toHaveLength(3);
+        expect(result[0].path).toBe(dir3); // Most recent
+        expect(result[2].path).toBe(dir1); // Oldest
+      } finally {
+        await fs.rm(dir1, { recursive: true, force: true });
+        await fs.rm(dir2, { recursive: true, force: true });
+        await fs.rm(dir3, { recursive: true, force: true });
+      }
+    });
+
+    test('should respect limit parameter', async () => {
+      const dir1 = await fs.mkdtemp(path.join(os.tmpdir(), 'ws1-'));
+      const dir2 = await fs.mkdtemp(path.join(os.tmpdir(), 'ws2-'));
+      const dir3 = await fs.mkdtemp(path.join(os.tmpdir(), 'ws3-'));
+      
+      try {
+        service.switchWorkspace(dir1);
+        service.switchWorkspace(dir2);
+        service.switchWorkspace(dir3);
+        
+        const result = service.listWorkspaces(2);
+        expect(result).toHaveLength(2);
+      } finally {
+        await fs.rm(dir1, { recursive: true, force: true });
+        await fs.rm(dir2, { recursive: true, force: true });
+        await fs.rm(dir3, { recursive: true, force: true });
+      }
+    });
+  });
+
+  describe('_findExistingTaskWorkdir', () => {
+    beforeEach(() => {
+      // Mock taskManager
+      service.taskManager = {
+        getAllTasks: jest.fn()
+      };
+    });
+
+    test('should return null when no tasks', () => {
+      service.taskManager.getAllTasks.mockReturnValue([]);
+      
+      const result = service._findExistingTaskWorkdir();
+      expect(result).toBeNull();
+    });
+
+    test('should return first existing workdir', async () => {
+      const existingDir = await fs.mkdtemp(path.join(os.tmpdir(), 'existing-'));
+      
+      try {
+        service.taskManager.getAllTasks.mockReturnValue([
+          { workdir: '/non/existent/path' },
+          { workdir: existingDir },
+          { workdir: tempDir }
+        ]);
+        
+        const result = service._findExistingTaskWorkdir();
+        expect(result).toBe(existingDir);
+      } finally {
+        await fs.rm(existingDir, { recursive: true, force: true });
+      }
+    });
+
+    test('should return null when all workdirs do not exist', () => {
+      service.taskManager.getAllTasks.mockReturnValue([
+        { workdir: '/non/existent/path1' },
+        { workdir: '/non/existent/path2' }
+      ]);
+      
+      const result = service._findExistingTaskWorkdir();
+      expect(result).toBeNull();
+    });
+
+    test('should handle tasks without workdir', () => {
+      service.taskManager.getAllTasks.mockReturnValue([
+        { workdir: null },
+        { workdir: undefined },
+        { workdir: tempDir }
+      ]);
+      
+      const result = service._findExistingTaskWorkdir();
+      expect(result).toBe(tempDir);
+    });
+  });
+
+  describe('ensureDefaultWorkspace', () => {
+    beforeEach(() => {
+      service.taskManager = {
+        getAllTasks: jest.fn().mockReturnValue([])
+      };
+    });
+
+    test('should not change existing default workspace', () => {
+      service.setDefaultWorkspace(tempDir);
+      service.ensureDefaultWorkspace();
+      
+      const defaultWs = service.getDefaultWorkspace();
+      expect(defaultWs.path).toBe(tempDir);
+    });
+
+    test('should set current as default if no default exists', async () => {
+      const currentDir = await fs.mkdtemp(path.join(os.tmpdir(), 'current-'));
+      
+      try {
+        service.switchWorkspace(currentDir);
+        service.ensureDefaultWorkspace();
+        
+        const defaultWs = service.getDefaultWorkspace();
+        expect(defaultWs.path).toBe(currentDir);
+      } finally {
+        await fs.rm(currentDir, { recursive: true, force: true });
+      }
+    });
+
+    test('should use task workdir if no current or default', async () => {
+      const taskDir = await fs.mkdtemp(path.join(os.tmpdir(), 'task-'));
+      
+      try {
+        service.taskManager.getAllTasks.mockReturnValue([
+          { workdir: taskDir }
+        ]);
+        
+        service.ensureDefaultWorkspace();
+        
+        const defaultWs = service.getDefaultWorkspace();
+        expect(defaultWs.path).toBe(taskDir);
+      } finally {
+        await fs.rm(taskDir, { recursive: true, force: true });
+      }
+    });
+
+    test('should use process.cwd() as last resort', () => {
+      service.ensureDefaultWorkspace();
+      
+      const defaultWs = service.getDefaultWorkspace();
+      expect(defaultWs.path).toBe(process.cwd());
+    });
+  });
+
+  describe('getWorkdirForKiro', () => {
+    beforeEach(() => {
+      service.taskManager = {
+        getAllTasks: jest.fn().mockReturnValue([])
+      };
+    });
+
+    test('should return current workspace if exists', () => {
+      service.switchWorkspace(tempDir);
+      
+      const workdir = service.getWorkdirForKiro();
+      expect(workdir).toBe(tempDir);
+    });
+
+    test('should return default workspace if no current', () => {
+      service.setDefaultWorkspace(tempDir);
+      
+      const workdir = service.getWorkdirForKiro();
+      expect(workdir).toBe(tempDir);
+    });
+
+    test('should call ensureDefaultWorkspace if both missing', () => {
+      const workdir = service.getWorkdirForKiro();
+      expect(workdir).toBe(process.cwd());
+      
+      // Verify default was set
+      const defaultWs = service.getDefaultWorkspace();
+      expect(defaultWs).toBeDefined();
+    });
+  });
+
+  describe('deleteWorkspace', () => {
+    test('should delete workspace by id', () => {
+      service.switchWorkspace(tempDir);
+      const workspace = service.getCurrentWorkspace();
+      
+      service.deleteWorkspace(workspace.id);
+      
+      const result = db.db.prepare('SELECT * FROM workspaces WHERE id = ?').get(workspace.id);
+      expect(result).toBeUndefined();
+    });
+
+    test('should not throw error for non-existent id', () => {
+      expect(() => {
+        service.deleteWorkspace(99999);
+      }).not.toThrow();
+    });
+  });
 });

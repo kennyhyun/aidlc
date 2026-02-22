@@ -10,6 +10,9 @@ const fastify = require('fastify')({
 const config = require('./config');
 const TaskManager = require('./services/task-manager');
 const MessagingService = require('./services/messaging-service');
+const WorkspaceService = require('./services/workspace-service');
+const DatabaseModel = require('./models/database');
+const KiroWrapper = require('./services/kiro-wrapper');
 
 // Register Swagger
 fastify.register(require('@fastify/swagger'), {
@@ -39,10 +42,26 @@ fastify.get('/health', async (request, reply) => {
 const taskManager = new TaskManager();
 const messagingService = new MessagingService();
 
+// Initialize database and workspace service
+const db = new DatabaseModel(config.database?.path || './data/taskman.db');
+let workspaceService;
+
 fastify.decorate('taskManager', taskManager);
 fastify.decorate('messagingService', messagingService);
 
 fastify.addHook('onReady', async () => {
+  // Initialize database
+  await db.initialize();
+  fastify.log.info('Database initialized');
+  
+  // Initialize workspace service
+  workspaceService = new WorkspaceService(db, taskManager);
+  workspaceService.ensureDefaultWorkspace();
+  fastify.log.info('Workspace service initialized');
+  
+  // Decorate fastify with workspace service for routes
+  fastify.decorate('workspaceService', workspaceService);
+  
   await taskManager.initialize(config);
   fastify.log.info('TaskManager initialized');
   
@@ -64,6 +83,10 @@ fastify.addHook('onReady', async () => {
   
   if (hasMessagingConfig) {
     fastify.log.debug('Initializing messaging service...');
+    
+    // Set workspace service before initializing messaging
+    messagingService.setWorkspaceService(workspaceService);
+    
     await messagingService.initialize(config.messaging);
     fastify.log.info(`Messaging service initialized with ${config.messaging.platform}`);
     
@@ -117,8 +140,7 @@ fastify.addHook('onReady', async () => {
         fastify.log.debug('Context built, initializing Kiro CLI...');
         
         // Use Kiro CLI for natural language understanding
-        const KiroWrapper = require('./services/kiro-wrapper');
-        const kiro = new KiroWrapper();
+        const kiro = new KiroWrapper(workspaceService);
         
         fastify.log.debug('Calling Kiro CLI chat...');
         const response = await kiro.chat(text, context);
@@ -212,6 +234,9 @@ fastify.addHook('onReady', async () => {
 fastify.addHook('onClose', async () => {
   await messagingService.stop();
   await taskManager.close();
+  if (db) {
+    await db.close();
+  }
   fastify.log.info('Services closed');
 });
 
@@ -220,6 +245,7 @@ fastify.register(require('./routes/tasks'));
 fastify.register(require('./routes/executions'));
 fastify.register(require('./routes/cron'));
 fastify.register(require('./routes/reports'));
+fastify.register(require('./routes/workspace'));
 
 // Start server
 const start = async () => {

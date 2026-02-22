@@ -10,6 +10,10 @@ const logger = pino({
 });
 
 class KiroWrapper {
+  constructor(workspaceService = null) {
+    this.workspaceService = workspaceService;
+  }
+
   async executeCommand({ command, workdir, timeout = 1800 }) {
     logger.debug(`kiro-wrapper/executeCommand:: Running command: ${command}`);
     
@@ -47,6 +51,13 @@ class KiroWrapper {
     logger.debug(`kiro-wrapper/chat:: Received message: ${message}`);
     logger.debug(`kiro-wrapper/chat:: Context: ${JSON.stringify(context, null, 2)}`);
     
+    // Determine workdir from workspace service
+    let workdir = process.cwd();
+    if (this.workspaceService) {
+      workdir = this.workspaceService.getWorkdirForKiro();
+      logger.debug(`kiro-wrapper/chat:: Using workspace: ${workdir}`);
+    }
+    
     // Build context string for Kiro
     const contextStr = JSON.stringify(context, null, 2);
     
@@ -76,7 +87,7 @@ Respond in Korean for explanations, but use the JSON format for execution reques
       
       const result = await this.executeCommand({
         command: `kiro-cli chat --no-interactive --trust-all-tools '${escapedPrompt}'`,
-        workdir: process.cwd(),
+        workdir: workdir,
         timeout: 60
       });
       

@@ -8,6 +8,7 @@ class MessagingService {
     this.platform = null;
     this.messageHandler = null;
     this.buttonHandler = null;
+    this.workspaceService = null;
   }
   
   async initialize(config) {
@@ -126,6 +127,8 @@ class MessagingService {
           return await this.cmdLogs(chatId, args[0]);
         case 'report':
           return await this.cmdReport(chatId);
+        case 'workspace':
+          return await this.cmdWorkspace(chatId, args);
         case 'help':
           return await this.cmdHelp(chatId);
         default:
@@ -200,6 +203,11 @@ ${prefix}run <task-id> - Execute a task
 ${prefix}cancel <execution-id> - Cancel running task
 ${prefix}logs <execution-id> - View task logs
 ${prefix}report - Generate daily report
+${prefix}workspace - Show current workspace
+${prefix}workspace <path> - Switch workspace
+${prefix}workspace list - List recent workspaces
+${prefix}workspace default - Switch to default workspace
+${prefix}workspace default <path> - Set default workspace
 ${prefix}help - Show this help message
 
 You can also use natural language:
@@ -209,6 +217,100 @@ You can also use natural language:
     `.trim();
     
     await this.adapter.sendMessage(chatId, help);
+  }
+
+  async cmdWorkspace(chatId, args) {
+    if (!this.workspaceService) {
+      return await this.adapter.sendMessage(
+        chatId,
+        '❌ Workspace service not available'
+      );
+    }
+    
+    // !workspace (show current)
+    if (args.length === 0) {
+      const current = this.workspaceService.getCurrentWorkspace();
+      if (!current) {
+        return await this.adapter.sendMessage(
+          chatId,
+          '📂 현재 워크스페이스가 설정되지 않았습니다'
+        );
+      }
+      return await this.adapter.sendMessage(
+        chatId,
+        `📂 현재 워크스페이스: ${current.path}\n접근 횟수: ${current.access_count}`
+      );
+    }
+    
+    // !workspace list
+    if (args[0] === 'list') {
+      const workspaces = this.workspaceService.listWorkspaces(5);
+      if (workspaces.length === 0) {
+        return await this.adapter.sendMessage(
+          chatId,
+          '📂 워크스페이스 히스토리가 없습니다'
+        );
+      }
+      
+      const list = workspaces.map((ws, idx) => {
+        const current = ws.is_current ? '✓ ' : '  ';
+        const defaultMark = ws.is_default ? '⭐ ' : '';
+        return `${idx + 1}. ${current}${defaultMark}${ws.path} (${ws.access_count}회)`;
+      }).join('\n');
+      
+      return await this.adapter.sendMessage(
+        chatId,
+        `📂 최근 워크스페이스:\n${list}`
+      );
+    }
+    
+    // !workspace default (switch to default)
+    if (args[0] === 'default' && args.length === 1) {
+      try {
+        const workspace = this.workspaceService.switchToDefault();
+        return await this.adapter.sendMessage(
+          chatId,
+          `✅ 디폴트 워크스페이스로 전환: ${workspace.path}`
+        );
+      } catch (error) {
+        return await this.adapter.sendMessage(
+          chatId,
+          `❌ ${error.message}`
+        );
+      }
+    }
+    
+    // !workspace default <path> (set default)
+    if (args[0] === 'default' && args.length > 1) {
+      const path = args.slice(1).join(' ');
+      try {
+        this.workspaceService.setDefaultWorkspace(path);
+        return await this.adapter.sendMessage(
+          chatId,
+          `✅ 디폴트 워크스페이스 설정: ${path}`
+        );
+      } catch (error) {
+        return await this.adapter.sendMessage(
+          chatId,
+          `❌ ${error.message}`
+        );
+      }
+    }
+    
+    // !workspace <path> (switch)
+    const path = args.join(' ');
+    try {
+      const workspace = this.workspaceService.switchWorkspace(path);
+      return await this.adapter.sendMessage(
+        chatId,
+        `✅ 워크스페이스 전환: ${workspace.path}`
+      );
+    } catch (error) {
+      return await this.adapter.sendMessage(
+        chatId,
+        `❌ ${error.message}`
+      );
+    }
   }
   
   async handleButtonClick(chatId, action, data, userId) {
@@ -258,6 +360,10 @@ You can also use natural language:
   
   onButtonClick(handler) {
     this.buttonHandler = handler;
+  }
+
+  setWorkspaceService(workspaceService) {
+    this.workspaceService = workspaceService;
   }
   
   // Notification methods
