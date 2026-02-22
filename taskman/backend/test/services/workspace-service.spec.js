@@ -106,4 +106,51 @@ describe('WorkspaceService', () => {
       expect(result).toBeNull();
     });
   });
+
+  describe('switchWorkspace', () => {
+    test('should switch to new workspace', () => {
+      service.switchWorkspace(tempDir);
+      
+      const current = service.getCurrentWorkspace();
+      expect(current).toBeDefined();
+      expect(current.path).toBe(tempDir);
+      expect(current.access_count).toBe(1);
+    });
+
+    test('should update existing workspace', () => {
+      // First switch
+      service.switchWorkspace(tempDir);
+      
+      // Second switch to same workspace
+      service.switchWorkspace(tempDir);
+      
+      const current = service.getCurrentWorkspace();
+      expect(current.access_count).toBe(2);
+    });
+
+    test('should unset previous current workspace', async () => {
+      const dir1 = await fs.mkdtemp(path.join(os.tmpdir(), 'ws1-'));
+      const dir2 = await fs.mkdtemp(path.join(os.tmpdir(), 'ws2-'));
+      
+      try {
+        service.switchWorkspace(dir1);
+        service.switchWorkspace(dir2);
+        
+        const allWorkspaces = db.db.prepare('SELECT * FROM workspaces').all();
+        const currentCount = allWorkspaces.filter(w => w.is_current === 1).length;
+        
+        expect(currentCount).toBe(1);
+        expect(service.getCurrentWorkspace().path).toBe(dir2);
+      } finally {
+        await fs.rm(dir1, { recursive: true, force: true });
+        await fs.rm(dir2, { recursive: true, force: true });
+      }
+    });
+
+    test('should throw error for non-existent path', () => {
+      expect(() => {
+        service.switchWorkspace('/non/existent/path');
+      }).toThrow('폴더를 찾을 수 없습니다');
+    });
+  });
 });

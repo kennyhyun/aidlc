@@ -71,6 +71,46 @@ class WorkspaceService {
       return null;
     }
   }
+
+  switchWorkspace(dirPath) {
+    // Validate path
+    this._validatePath(dirPath);
+    
+    // Use transaction
+    const transaction = this.db.db.transaction(() => {
+      // Unset current workspace
+      this.db.db.prepare(`
+        UPDATE workspaces SET is_current = 0 WHERE is_current = 1
+      `).run();
+      
+      // Check if workspace exists
+      const existing = this.db.db.prepare(`
+        SELECT * FROM workspaces WHERE path = ?
+      `).get(dirPath);
+      
+      if (existing) {
+        // Update existing workspace
+        this.db.db.prepare(`
+          UPDATE workspaces 
+          SET is_current = 1, 
+              last_accessed_at = CURRENT_TIMESTAMP,
+              access_count = access_count + 1
+          WHERE path = ?
+        `).run(dirPath);
+      } else {
+        // Insert new workspace
+        this.db.db.prepare(`
+          INSERT INTO workspaces (path, is_current, access_count)
+          VALUES (?, 1, 1)
+        `).run(dirPath);
+      }
+    });
+    
+    transaction();
+    
+    logger.info(`Switched to workspace: ${dirPath}`);
+    return this.getCurrentWorkspace();
+  }
 }
 
 module.exports = WorkspaceService;
