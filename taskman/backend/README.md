@@ -113,6 +113,60 @@ Start the server and send messages to your bot:
 - "목록" - List tasks (Korean)
 - "실행 hello" - Run task (Korean)
 
+## Workspace Management
+
+TaskMan supports workspace switching to manage multiple project directories. The workspace determines the working directory for Kiro CLI execution.
+
+### Commands
+
+**Chatbot:**
+- `!workspace` - Show current workspace
+- `!workspace <path>` - Switch to workspace
+- `!workspace list` - List recent workspaces (up to 5)
+- `!workspace default` - Switch to default workspace
+- `!workspace default <path>` - Set default workspace
+
+**API:**
+- `GET /api/workspace` - Get current workspace
+- `POST /api/workspace/switch` - Switch workspace
+  ```json
+  {"path": "/path/to/workspace"}
+  ```
+- `POST /api/workspace/default` - Set default workspace
+  ```json
+  {"path": "/path/to/workspace"}
+  ```
+- `GET /api/workspace/default` - Get default workspace
+- `GET /api/workspace/list?limit=10` - List workspaces
+- `DELETE /api/workspace/:id` - Delete workspace history
+
+### How It Works
+
+- **Current workspace** is used for Kiro CLI execution
+- **Default workspace** is automatically set on first run to:
+  1. Current workspace (if exists)
+  2. First valid task workdir (if exists)
+  3. `process.cwd()` (as fallback)
+- **Workspace history** tracks access count and last accessed time
+- **Task workdir** is independent of workspace settings (tasks run in their configured workdir)
+
+### Example Usage
+
+```bash
+# Switch to a project directory
+curl -X POST http://localhost:8254/api/workspace/switch \
+  -H "Content-Type: application/json" \
+  -d '{"path": "/Users/kenny/Projects/my-project"}'
+
+# Set as default
+curl -X POST http://localhost:8254/api/workspace/default \
+  -H "Content-Type: application/json" \
+  -d '{"path": "/Users/kenny/Projects/my-project"}'
+
+# List recent workspaces
+curl http://localhost:8254/api/workspace/list
+```
+
 ## API Endpoints
 
 ### Tasks
@@ -139,6 +193,15 @@ Start the server and send messages to your bot:
 ### Cron
 
 - `POST /api/cron/trigger` - Trigger task from cron
+
+### Workspace
+
+- `GET /api/workspace` - Get current workspace
+- `POST /api/workspace/switch` - Switch workspace
+- `POST /api/workspace/default` - Set default workspace
+- `GET /api/workspace/default` - Get default workspace
+- `GET /api/workspace/list` - List workspaces
+- `DELETE /api/workspace/:id` - Delete workspace
 
 ## API Documentation
 
