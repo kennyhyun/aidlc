@@ -14,6 +14,15 @@ class MessagingService {
     logger.debug('Initializing messaging service...');
     logger.debug(`Platform: ${config.platform}`);
     
+    // Validate ALLOWED_USER_IDS is configured
+    const allowedUsers = process.env.ALLOWED_USER_IDS?.split(',').map(id => id.trim()).filter(id => id) || [];
+    if (allowedUsers.length === 0) {
+      logger.warn('⚠️  ALLOWED_USER_IDS not configured - messaging integration disabled');
+      logger.warn('⚠️  Set ALLOWED_USER_IDS in .env to enable messaging');
+      return; // Skip initialization
+    }
+    logger.info(`Access control enabled for ${allowedUsers.length} user(s)`);
+    
     this.platform = config.platform || 'telegram';
     
     if (this.platform === 'telegram') {
@@ -67,6 +76,12 @@ class MessagingService {
     // Ignore messages without text
     if (!text || typeof text !== 'string') {
       logger.debug('Ignoring message without text');
+      return;
+    }
+    
+    // Access control: Check if user is allowed
+    if (!this.isUserAllowed(userId)) {
+      logger.debug(`Ignored message from unauthorized user: ${userId}`);
       return;
     }
     
@@ -197,6 +212,12 @@ You can also use natural language:
   }
   
   async handleButtonClick(chatId, action, data, userId) {
+    // Access control: Check if user is allowed
+    if (!this.isUserAllowed(userId)) {
+      logger.debug(`Ignored button click from unauthorized user: ${userId}`);
+      return;
+    }
+    
     if (this.buttonHandler) {
       return await this.buttonHandler(chatId, action, data, userId);
     }
@@ -217,6 +238,19 @@ You can also use natural language:
     }
   }
   
+  isUserAllowed(userId) {
+    const allowedUsers = process.env.ALLOWED_USER_IDS?.split(',').map(id => id.trim()).filter(id => id) || [];
+    
+    // ALLOWED_USER_IDS is required - reject if not configured
+    if (allowedUsers.length === 0) {
+      logger.warn('ALLOWED_USER_IDS not configured - rejecting all users');
+      return false;
+    }
+    
+    // Check if user is in allowed list
+    return allowedUsers.includes(String(userId));
+  }
+  
   // Custom handler registration
   onMessage(handler) {
     this.messageHandler = handler;
@@ -228,11 +262,13 @@ You can also use natural language:
   
   // Notification methods
   async notifyTaskStarted(taskId, taskName, executionId) {
+    if (!this.adapter) return; // Skip if not initialized
     const message = `▶️ Task started: ${taskName}\nID: ${taskId}\nExecution: ${executionId}`;
     await this.adapter.sendMessage(null, message);
   }
   
   async notifyTaskCompleted(taskId, taskName, executionId, duration) {
+    if (!this.adapter) return; // Skip if not initialized
     const message = `✅ Task completed: ${taskName}\nDuration: ${duration}s`;
     const buttons = [
       { text: '🔄 Rerun', action: 'rerun', data: taskId },
@@ -242,6 +278,7 @@ You can also use natural language:
   }
   
   async notifyTaskFailed(taskId, taskName, executionId, error) {
+    if (!this.adapter) return; // Skip if not initialized
     const message = `❌ Task failed: ${taskName}\nError: ${error}`;
     const buttons = [
       { text: '🔄 Retry', action: 'rerun', data: taskId },
@@ -251,6 +288,7 @@ You can also use natural language:
   }
   
   async sendDailyReport() {
+    if (!this.adapter) return; // Skip if not initialized
     const report = await this.generateDailyReport();
     await this.adapter.sendMessage(null, report);
   }
@@ -262,10 +300,12 @@ You can also use natural language:
   }
   
   async sendMessage(chatId, text, options = {}) {
+    if (!this.adapter) return; // Skip if not initialized
     return this.adapter.sendMessage(chatId, text, options);
   }
   
   async sendTyping(chatId) {
+    if (!this.adapter) return; // Skip if not initialized
     return this.adapter.sendTyping(chatId);
   }
   
