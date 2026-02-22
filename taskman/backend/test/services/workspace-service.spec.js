@@ -28,4 +28,26 @@ describe('WorkspaceService', () => {
     expect(service).toBeDefined();
     expect(service.db).toBe(db);
   });
+
+  describe('_validatePath', () => {
+    test('should return true for existing directory', async () => {
+      const result = service._validatePath(tempDir);
+      expect(result).toBe(true);
+    });
+
+    test('should throw error for non-existent path', () => {
+      expect(() => {
+        service._validatePath('/non/existent/path');
+      }).toThrow('폴더를 찾을 수 없습니다');
+    });
+
+    test('should throw error for file path', async () => {
+      const filePath = path.join(tempDir, 'test.txt');
+      await fs.writeFile(filePath, 'test');
+      
+      expect(() => {
+        service._validatePath(filePath);
+      }).toThrow('유효한 폴더가 아닙니다');
+    });
+  });
 });
