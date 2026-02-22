@@ -50,4 +50,33 @@ describe('WorkspaceService', () => {
       }).toThrow('유효한 폴더가 아닙니다');
     });
   });
+
+  describe('getCurrentWorkspace', () => {
+    test('should return null when no current workspace', () => {
+      const result = service.getCurrentWorkspace();
+      expect(result).toBeNull();
+    });
+
+    test('should return current workspace', () => {
+      // Insert a workspace
+      db.db.prepare(`
+        INSERT INTO workspaces (path, is_current) VALUES (?, 1)
+      `).run(tempDir);
+      
+      const result = service.getCurrentWorkspace();
+      expect(result).toBeDefined();
+      expect(result.path).toBe(tempDir);
+      expect(result.is_current).toBe(1);
+    });
+
+    test('should return null if current workspace path does not exist', () => {
+      // Insert a workspace with non-existent path
+      db.db.prepare(`
+        INSERT INTO workspaces (path, is_current) VALUES (?, 1)
+      `).run('/non/existent/path');
+      
+      const result = service.getCurrentWorkspace();
+      expect(result).toBeNull();
+    });
+  });
 });
