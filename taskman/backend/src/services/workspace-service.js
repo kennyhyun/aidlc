@@ -51,6 +51,26 @@ class WorkspaceService {
       return null;
     }
   }
+
+  getDefaultWorkspace() {
+    const stmt = this.db.db.prepare(`
+      SELECT * FROM workspaces WHERE is_default = 1 LIMIT 1
+    `);
+    const workspace = stmt.get();
+    
+    if (!workspace) {
+      return null;
+    }
+    
+    // Verify path still exists
+    try {
+      this._validatePath(workspace.path);
+      return workspace;
+    } catch (error) {
+      logger.warn(`Default workspace path no longer exists: ${workspace.path}`);
+      return null;
+    }
+  }
 }
 
 module.exports = WorkspaceService;

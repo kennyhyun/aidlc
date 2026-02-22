@@ -79,4 +79,31 @@ describe('WorkspaceService', () => {
       expect(result).toBeNull();
     });
   });
+
+  describe('getDefaultWorkspace', () => {
+    test('should return null when no default workspace', () => {
+      const result = service.getDefaultWorkspace();
+      expect(result).toBeNull();
+    });
+
+    test('should return default workspace', () => {
+      db.db.prepare(`
+        INSERT INTO workspaces (path, is_default) VALUES (?, 1)
+      `).run(tempDir);
+      
+      const result = service.getDefaultWorkspace();
+      expect(result).toBeDefined();
+      expect(result.path).toBe(tempDir);
+      expect(result.is_default).toBe(1);
+    });
+
+    test('should return null if default workspace path does not exist', () => {
+      db.db.prepare(`
+        INSERT INTO workspaces (path, is_default) VALUES (?, 1)
+      `).run('/non/existent/path');
+      
+      const result = service.getDefaultWorkspace();
+      expect(result).toBeNull();
+    });
+  });
 });
