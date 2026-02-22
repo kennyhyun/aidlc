@@ -64,6 +64,12 @@ class MessagingService {
   }
   
   async handleMessage(chatId, text, userId) {
+    // Ignore messages without text
+    if (!text || typeof text !== 'string') {
+      logger.debug('Ignoring message without text');
+      return;
+    }
+    
     // 1. Commands with ! prefix (Slack-friendly)
     if (text.startsWith('!')) {
       return await this.handleCommand(chatId, text);

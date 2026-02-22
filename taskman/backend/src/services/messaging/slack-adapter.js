@@ -131,7 +131,8 @@ class SlackAdapter extends MessagingAdapter {
         user: message.user,
         text: message.text,
         bot_id: message.bot_id,
-        channel_type: message.channel_type
+        channel_type: message.channel_type,
+        subtype: message.subtype
       }, 'Message received');
       
       const channelId = message.channel;
@@ -141,6 +142,18 @@ class SlackAdapter extends MessagingAdapter {
       // Ignore bot messages
       if (message.bot_id) {
         logger.debug('Ignoring bot message');
+        return;
+      }
+      
+      // Ignore messages without text (file uploads, etc.)
+      if (!text) {
+        logger.debug('Ignoring message without text');
+        return;
+      }
+      
+      // Ignore message subtypes (edits, deletes, etc.)
+      if (message.subtype) {
+        logger.debug(`Ignoring message with subtype: ${message.subtype}`);
         return;
       }
       
