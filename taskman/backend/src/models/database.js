@@ -62,6 +62,17 @@ class DatabaseModel {
         value TEXT NOT NULL,
         updated_at DATETIME NOT NULL
       );
+      
+      CREATE TABLE IF NOT EXISTS workspaces (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        path TEXT UNIQUE NOT NULL,
+        name TEXT,
+        is_current BOOLEAN DEFAULT 0,
+        is_default BOOLEAN DEFAULT 0,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        last_accessed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        access_count INTEGER DEFAULT 1
+      );
     `);
   }
   
