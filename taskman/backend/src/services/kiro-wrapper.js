@@ -115,6 +115,20 @@ Respond in Korean for explanations, but use the JSON format for execution reques
     }
     return null;
   }
+  
+  formatResponse(cleanOutput, contextInfo, workdir) {
+    let response = cleanOutput;
+    
+    // 워크스페이스 정보 추가
+    response += `\n\n[워크스페이스: ${workdir}]`;
+    
+    // 컨텍스트 정보 추가
+    if (contextInfo) {
+      response += `\n[컨텍스트: ${contextInfo.percentage}% (${contextInfo.used}/${contextInfo.total} 토큰)]`;
+    }
+    
+    return response;
+  }
 }
 
 module.exports = KiroWrapper;

@@ -143,4 +143,44 @@ describe('KiroWrapper', () => {
       expect(result.percentage).toBe(33);
     });
   });
+  
+  describe('formatResponse', () => {
+    test('should format response with workspace and context info', () => {
+      const wrapper = new KiroWrapper();
+      const cleanOutput = '빌드를 실행하겠습니다.';
+      const contextInfo = { used: 5000, total: 20000, percentage: 25 };
+      const workdir = '/project/A';
+      
+      const result = wrapper.formatResponse(cleanOutput, contextInfo, workdir);
+      
+      expect(result).toContain('빌드를 실행하겠습니다.');
+      expect(result).toContain('[워크스페이스: /project/A]');
+      expect(result).toContain('[컨텍스트: 25% (5000/20000 토큰)]');
+    });
+    
+    test('should format response without context info when null', () => {
+      const wrapper = new KiroWrapper();
+      const cleanOutput = '안녕하세요';
+      const contextInfo = null;
+      const workdir = '/project/B';
+      
+      const result = wrapper.formatResponse(cleanOutput, contextInfo, workdir);
+      
+      expect(result).toContain('안녕하세요');
+      expect(result).toContain('[워크스페이스: /project/B]');
+      expect(result).not.toContain('[컨텍스트:');
+    });
+    
+    test('should handle empty output', () => {
+      const wrapper = new KiroWrapper();
+      const cleanOutput = '';
+      const contextInfo = { used: 100, total: 1000, percentage: 10 };
+      const workdir = '/test';
+      
+      const result = wrapper.formatResponse(cleanOutput, contextInfo, workdir);
+      
+      expect(result).toContain('[워크스페이스: /test]');
+      expect(result).toContain('[컨텍스트: 10% (100/1000 토큰)]');
+    });
+  });
 });
