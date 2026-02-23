@@ -97,4 +97,50 @@ describe('KiroWrapper', () => {
       await expect(wrapper.chat('test')).rejects.toThrow('Error: Command not found');
     });
   });
+  
+  describe('parseContextInfo', () => {
+    test('should parse token usage from output', () => {
+      const wrapper = new KiroWrapper();
+      const output = 'Some output\nToken usage: 5000/20000\nMore output';
+      
+      const result = wrapper.parseContextInfo(output);
+      
+      expect(result).toEqual({
+        used: 5000,
+        total: 20000,
+        percentage: 25
+      });
+    });
+    
+    test('should handle case-insensitive token usage', () => {
+      const wrapper = new KiroWrapper();
+      const output = 'token USAGE: 10000 / 40000';
+      
+      const result = wrapper.parseContextInfo(output);
+      
+      expect(result).toEqual({
+        used: 10000,
+        total: 40000,
+        percentage: 25
+      });
+    });
+    
+    test('should return null when no token info found', () => {
+      const wrapper = new KiroWrapper();
+      const output = 'No token information here';
+      
+      const result = wrapper.parseContextInfo(output);
+      
+      expect(result).toBeNull();
+    });
+    
+    test('should round percentage correctly', () => {
+      const wrapper = new KiroWrapper();
+      const output = 'Token usage: 3333/10000';
+      
+      const result = wrapper.parseContextInfo(output);
+      
+      expect(result.percentage).toBe(33);
+    });
+  });
 });

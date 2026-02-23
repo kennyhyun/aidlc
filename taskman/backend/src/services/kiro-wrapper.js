@@ -104,6 +104,17 @@ Respond in Korean for explanations, but use the JSON format for execution reques
       throw new Error(`Kiro CLI error: ${error?.message}`);
     }
   }
+  
+  parseContextInfo(output) {
+    const tokenMatch = output.match(/Token usage:\s*(\d+)\s*\/\s*(\d+)/i);
+    if (tokenMatch) {
+      const used = parseInt(tokenMatch[1]);
+      const total = parseInt(tokenMatch[2]);
+      const percentage = Math.round((used / total) * 100);
+      return { used, total, percentage };
+    }
+    return null;
+  }
 }
 
 module.exports = KiroWrapper;
