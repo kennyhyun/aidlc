@@ -167,6 +167,59 @@ curl -X POST http://localhost:8254/api/workspace/default \
 curl http://localhost:8254/api/workspace/list
 ```
 
+## Session Management
+
+TaskMan uses kiro-cli with session persistence to maintain conversation context across multiple interactions.
+
+### Features
+
+- **Automatic Session Persistence**: Conversations are saved per workspace
+- **Context Size Display**: Token usage shown in responses
+- **Session Termination**: Use `bye` to clear current session
+- **Workspace Isolation**: Each workspace has independent session
+
+### Usage
+
+**Continue Conversation:**
+```
+User: "빌드 실행해줘"
+Bot: "빌드를 실행하겠습니다..."
+     [워크스페이스: /project/A]
+     [컨텍스트: 15% (3000/20000 토큰)]
+
+User: "결과 어때?"
+Bot: "빌드가 성공적으로 완료되었습니다..."
+     [워크스페이스: /project/A]
+     [컨텍스트: 22% (4400/20000 토큰)]
+```
+
+**Switch Workspace:**
+```
+User: "!workspace /project/B"
+Bot: "워크스페이스가 변경되었습니다: /project/B
+     
+     이전 워크스페이스(/project/A)의 세션은 보존되어 있습니다.
+     해당 워크스페이스로 돌아가면 대화를 이어갈 수 있습니다."
+```
+
+**Clear Session:**
+```
+User: "bye"
+Bot: "세션이 종료되었습니다. 다음 대화는 새로운 세션으로 시작됩니다."
+```
+
+### Session Storage
+
+Sessions are stored in `.kiro/sessions/` directory within each workspace. Each workspace maintains its own independent conversation history.
+
+### Context Size
+
+The context size indicator shows:
+- Percentage of token usage (e.g., 25%)
+- Absolute token count (e.g., 5000/20000)
+
+When context approaches 100%, consider starting a new session with `bye`.
+
 ## API Endpoints
 
 ### Tasks
