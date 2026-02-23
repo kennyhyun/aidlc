@@ -1,6 +1,8 @@
 const { spawn } = require('child_process');
 const stripAnsi = require('strip-ansi');
 const pino = require('pino');
+const fs = require('fs');
+const path = require('path');
 
 const logger = pino({
   level: process.env.LOG_LEVEL || 'info',
@@ -128,6 +130,27 @@ Respond in Korean for explanations, but use the JSON format for execution reques
     }
     
     return response;
+  }
+  
+  async clearSession(workdir) {
+    const sessionPath = path.join(workdir, '.kiro', 'sessions');
+    
+    if (!fs.existsSync(sessionPath)) {
+      logger.debug(`Session path does not exist: ${sessionPath}`);
+      return;
+    }
+    
+    try {
+      const files = fs.readdirSync(sessionPath);
+      for (const file of files) {
+        const filePath = path.join(sessionPath, file);
+        fs.unlinkSync(filePath);
+        logger.debug(`Deleted session file: ${filePath}`);
+      }
+      logger.info(`Cleared session for workdir: ${workdir}`);
+    } catch (error) {
+      logger.error(`Failed to clear session: ${error.message}`);
+    }
   }
 }
 

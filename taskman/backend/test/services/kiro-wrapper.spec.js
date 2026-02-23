@@ -1,4 +1,6 @@
 const KiroWrapper = require('../../src/services/kiro-wrapper');
+const fs = require('fs');
+const path = require('path');
 
 describe('KiroWrapper', () => {
   let wrapper;
@@ -181,6 +183,52 @@ describe('KiroWrapper', () => {
       
       expect(result).toContain('[워크스페이스: /test]');
       expect(result).toContain('[컨텍스트: 10% (100/1000 토큰)]');
+    });
+  });
+  
+  describe('clearSession', () => {
+    test('should delete session files when they exist', async () => {
+      const wrapper = new KiroWrapper();
+      const testWorkdir = '/tmp/test-kiro-session';
+      const sessionPath = path.join(testWorkdir, '.kiro', 'sessions');
+      
+      // Setup: Create test session files
+      fs.mkdirSync(sessionPath, { recursive: true });
+      fs.writeFileSync(path.join(sessionPath, 'session1.json'), '{}');
+      fs.writeFileSync(path.join(sessionPath, 'session2.json'), '{}');
+      
+      await wrapper.clearSession(testWorkdir);
+      
+      // Verify files are deleted
+      const files = fs.existsSync(sessionPath) ? fs.readdirSync(sessionPath) : [];
+      expect(files.length).toBe(0);
+      
+      // Cleanup
+      fs.rmSync(testWorkdir, { recursive: true, force: true });
+    });
+    
+    test('should not throw error when session path does not exist', async () => {
+      const wrapper = new KiroWrapper();
+      const testWorkdir = '/tmp/nonexistent-kiro-session';
+      
+      await expect(wrapper.clearSession(testWorkdir)).resolves.not.toThrow();
+    });
+    
+    test('should handle empty session directory', async () => {
+      const wrapper = new KiroWrapper();
+      const testWorkdir = '/tmp/empty-kiro-session';
+      const sessionPath = path.join(testWorkdir, '.kiro', 'sessions');
+      
+      // Setup: Create empty session directory
+      fs.mkdirSync(sessionPath, { recursive: true });
+      
+      await wrapper.clearSession(testWorkdir);
+      
+      // Verify no error
+      expect(fs.existsSync(sessionPath)).toBe(true);
+      
+      // Cleanup
+      fs.rmSync(testWorkdir, { recursive: true, force: true });
     });
   });
 });
