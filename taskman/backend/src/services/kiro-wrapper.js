@@ -60,6 +60,12 @@ class KiroWrapper {
       logger.debug(`kiro-wrapper/chat:: Using workspace: ${workdir}`);
     }
     
+    // Handle !bye command
+    if (message.trim() === '!bye') {
+      await this.clearSession(workdir);
+      return '세션이 종료되었습니다. 다음 대화는 새로운 세션으로 시작됩니다.';
+    }
+    
     // Build context string for Kiro
     const contextStr = JSON.stringify(context, null, 2);
     
@@ -88,7 +94,7 @@ Respond in Korean for explanations, but use the JSON format for execution reques
       logger.debug('kiro-wrapper/chat:: Calling kiro-cli...');
       
       const result = await this.executeCommand({
-        command: `kiro-cli chat --no-interactive --trust-all-tools '${escapedPrompt}'`,
+        command: `kiro-cli chat --no-interactive --trust-all-tools --resume '${escapedPrompt}'`,
         workdir: workdir,
         timeout: 60
       });
@@ -96,7 +102,12 @@ Respond in Korean for explanations, but use the JSON format for execution reques
       if (result.code === 0) {
         const cleanOutput = stripAnsi(result.stdout.trim());
         logger.debug(`kiro-wrapper/chat:: Response: ${cleanOutput}`);
-        return cleanOutput;
+        
+        // Parse context info from stdout and stderr
+        const contextInfo = this.parseContextInfo(result.stdout + result.stderr);
+        
+        // Format response with workspace and context info
+        return this.formatResponse(cleanOutput, contextInfo, workdir);
       } else {
         logger.error(`kiro-wrapper/chat:: Kiro CLI failed with stderr: ${result.stderr}`);
         throw new Error(result.stderr || 'Kiro CLI failed');

@@ -231,4 +231,67 @@ describe('KiroWrapper', () => {
       fs.rmSync(testWorkdir, { recursive: true, force: true });
     });
   });
+  
+  describe('chat with session management', () => {
+    test('should handle !bye command', async () => {
+      const mockWorkspaceService = {
+        getWorkdirForKiro: jest.fn().mockReturnValue('/test/workspace')
+      };
+      
+      const wrapper = new KiroWrapper(mockWorkspaceService);
+      wrapper.clearSession = jest.fn().mockResolvedValue();
+      
+      const result = await wrapper.chat('!bye');
+      
+      expect(wrapper.clearSession).toHaveBeenCalledWith('/test/workspace');
+      expect(result).toContain('세션이 종료되었습니다');
+    });
+    
+    test('should add --resume flag to kiro-cli command', async () => {
+      const wrapper = new KiroWrapper();
+      wrapper.executeCommand = jest.fn().mockResolvedValue({
+        code: 0,
+        stdout: 'Response\n',
+        stderr: ''
+      });
+      
+      await wrapper.chat('test message');
+      
+      expect(wrapper.executeCommand).toHaveBeenCalledWith(
+        expect.objectContaining({
+          command: expect.stringContaining('--resume')
+        })
+      );
+    });
+    
+    test('should parse context info and format response', async () => {
+      const wrapper = new KiroWrapper();
+      wrapper.executeCommand = jest.fn().mockResolvedValue({
+        code: 0,
+        stdout: 'Response text\n',
+        stderr: 'Token usage: 5000/20000\n'
+      });
+      
+      const result = await wrapper.chat('test');
+      
+      expect(result).toContain('Response text');
+      expect(result).toContain('[워크스페이스:');
+      expect(result).toContain('[컨텍스트: 25% (5000/20000 토큰)]');
+    });
+    
+    test('should handle response without context info', async () => {
+      const wrapper = new KiroWrapper();
+      wrapper.executeCommand = jest.fn().mockResolvedValue({
+        code: 0,
+        stdout: 'Response text\n',
+        stderr: ''
+      });
+      
+      const result = await wrapper.chat('test');
+      
+      expect(result).toContain('Response text');
+      expect(result).toContain('[워크스페이스:');
+      expect(result).not.toContain('[컨텍스트:');
+    });
+  });
 });
