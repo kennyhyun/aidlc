@@ -1,5 +1,5 @@
 const { spawn } = require('child_process');
-const stripAnsi = require('strip-ansi').default || require('strip-ansi');
+const stripAnsi = require('strip-ansi');
 const pino = require('pino');
 
 const logger = pino({
