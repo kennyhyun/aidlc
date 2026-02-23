@@ -2,11 +2,14 @@ const fs = require('fs');
 const path = require('path');
 const pino = require('pino');
 
+// Use pino-pretty only in non-test environments to avoid hanging tests
 const logger = pino({
   level: process.env.LOG_LEVEL || 'info',
-  transport: {
-    target: 'pino-pretty'
-  }
+  ...(process.env.NODE_ENV !== 'test' && {
+    transport: {
+      target: 'pino-pretty'
+    }
+  })
 });
 
 class WorkspaceService {

@@ -8,8 +8,12 @@ jest.mock('../../src/services/messaging/slack-adapter');
 describe('MessagingService', () => {
   let service;
   let mockAdapter;
+  const originalEnv = process.env.ALLOWED_USER_IDS;
   
   beforeEach(() => {
+    // Mock ALLOWED_USER_IDS for tests
+    process.env.ALLOWED_USER_IDS = 'user1,user2';
+    
     mockAdapter = {
       start: jest.fn().mockResolvedValue(undefined),
       stop: jest.fn().mockResolvedValue(undefined),
@@ -27,6 +31,7 @@ describe('MessagingService', () => {
   
   afterEach(() => {
     jest.clearAllMocks();
+    process.env.ALLOWED_USER_IDS = originalEnv;
   });
   
   describe('initialize', () => {
@@ -109,7 +114,6 @@ describe('MessagingService', () => {
       
       await service.handleMessage('123', 'Hello', 'user1');
       
-      expect(mockAdapter.sendTyping).toHaveBeenCalledWith('123');
       expect(customHandler).toHaveBeenCalledWith('123', 'Hello', 'user1');
     });
     

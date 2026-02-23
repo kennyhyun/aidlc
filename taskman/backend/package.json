@@ -28,7 +28,10 @@
       "text",
       "lcov",
       "html"
-    ]
+    ],
+    "testTimeout": 10000,
+    "forceExit": true,
+    "detectOpenHandles": true
   },
   "repository": {
     "type": "git",
