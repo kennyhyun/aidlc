@@ -299,12 +299,19 @@ You can also use natural language:
     
     // !workspace <path> (switch)
     const path = args.join(' ');
+    const oldWorkspace = this.workspaceService.getCurrentWorkspace();
+    
     try {
       const workspace = this.workspaceService.switchWorkspace(path);
-      return await this.adapter.sendMessage(
-        chatId,
-        `✅ 워크스페이스 전환: ${workspace.path}`
-      );
+      
+      let message = `✅ 워크스페이스 전환: ${workspace.path}`;
+      
+      if (oldWorkspace && oldWorkspace.path !== workspace.path) {
+        message += `\n\n이전 워크스페이스(${oldWorkspace.path})의 세션은 보존되어 있습니다.`;
+        message += `\n해당 워크스페이스로 돌아가면 대화를 이어갈 수 있습니다.`;
+      }
+      
+      return await this.adapter.sendMessage(chatId, message);
     } catch (error) {
       return await this.adapter.sendMessage(
         chatId,
