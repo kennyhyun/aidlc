@@ -33,8 +33,9 @@ describe('KiroWrapper', () => {
       
       const result = await wrapper.chat('빌드 실행해줘');
       
-      // Should strip ANSI codes and return clean JSON
-      expect(result).toBe('{"action": "execute", "task_id": "build-backend"}');
+      // Should strip ANSI codes and return clean JSON with workspace info
+      expect(result).toContain('{"action": "execute", "task_id": "build-backend"}');
+      expect(result).toContain('[워크스페이스:');
       expect(result).not.toContain('\x1b[');
     });
     
@@ -64,7 +65,8 @@ describe('KiroWrapper', () => {
       
       const result = await wrapper.chat('결과 알려줘');
       
-      expect(result).toBe('태스크가 성공적으로 완료되었습니다.');
+      expect(result).toContain('태스크가 성공적으로 완료되었습니다.');
+      expect(result).toContain('[워크스페이스:');
     });
     
     test('should use workspace workdir when available', async () => {
