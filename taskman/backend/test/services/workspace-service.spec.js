@@ -219,7 +219,10 @@ describe('WorkspaceService', () => {
       
       try {
         service.switchWorkspace(dir1);
+        // Add small delay to ensure different timestamps
+        await new Promise(resolve => setTimeout(resolve, 1100));
         service.switchWorkspace(dir2);
+        await new Promise(resolve => setTimeout(resolve, 1100));
         service.switchWorkspace(dir3);
         
         const result = service.listWorkspaces();

@@ -40,7 +40,8 @@ describe('SlackAdapter', () => {
       expect(App).toHaveBeenCalledWith({
         token: 'xoxb-test-token',
         socketMode: true,
-        appToken: 'xapp-test-token'
+        appToken: 'xapp-test-token',
+        logLevel: 'ERROR'
       });
       expect(mockApp.start).toHaveBeenCalled();
     });
@@ -148,7 +149,7 @@ describe('SlackAdapter', () => {
       
       expect(mockApp.client.chat.postMessage).toHaveBeenCalledWith({
         channel: 'C1234567890',
-        text: '🤔 Processing...'
+        text: '⏳ Processing...'
       });
     });
   });
