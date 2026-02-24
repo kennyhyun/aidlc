@@ -29,9 +29,9 @@ describe('KiroWrapper - Workspace Integration', () => {
   test('should use current workspace for kiro-cli', async () => {
     workspaceService.switchWorkspace(tempDir);
     
-    // Mock executeCommand to capture workdir
+    // Mock executeCommandWithStreaming to capture workdir
     let capturedWorkdir;
-    kiroWrapper.executeCommand = jest.fn(({ workdir }) => {
+    kiroWrapper.executeCommandWithStreaming = jest.fn(({ workdir }) => {
       capturedWorkdir = workdir;
       return Promise.resolve({ code: 0, stdout: 'test', stderr: '' });
     });
@@ -45,7 +45,7 @@ describe('KiroWrapper - Workspace Integration', () => {
     workspaceService.setDefaultWorkspace(tempDir);
     
     let capturedWorkdir;
-    kiroWrapper.executeCommand = jest.fn(({ workdir }) => {
+    kiroWrapper.executeCommandWithStreaming = jest.fn(({ workdir }) => {
       capturedWorkdir = workdir;
       return Promise.resolve({ code: 0, stdout: 'test', stderr: '' });
     });
@@ -57,7 +57,7 @@ describe('KiroWrapper - Workspace Integration', () => {
 
   test('should use process.cwd() when no workspace configured', async () => {
     let capturedWorkdir;
-    kiroWrapper.executeCommand = jest.fn(({ workdir }) => {
+    kiroWrapper.executeCommandWithStreaming = jest.fn(({ workdir }) => {
       capturedWorkdir = workdir;
       return Promise.resolve({ code: 0, stdout: 'test', stderr: '' });
     });
@@ -71,7 +71,7 @@ describe('KiroWrapper - Workspace Integration', () => {
     const wrapperWithoutWorkspace = new KiroWrapper();
     
     let capturedWorkdir;
-    wrapperWithoutWorkspace.executeCommand = jest.fn(({ workdir }) => {
+    wrapperWithoutWorkspace.executeCommandWithStreaming = jest.fn(({ workdir }) => {
       capturedWorkdir = workdir;
       return Promise.resolve({ code: 0, stdout: 'test', stderr: '' });
     });

@@ -2,6 +2,7 @@
 /.kiro
 /.amazonq
 /.files
+/.taskman
 /subagents/*/data
 
 node_modules/

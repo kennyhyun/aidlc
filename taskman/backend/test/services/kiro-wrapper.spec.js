@@ -25,7 +25,7 @@ describe('KiroWrapper', () => {
   describe('chat', () => {
     test('should strip ANSI codes from kiro-cli output', async () => {
       // Simulate LLM response with ANSI color codes (like kiro-cli output)
-      wrapper.executeCommand = jest.fn().mockResolvedValue({
+      wrapper.executeCommandWithStreaming = jest.fn().mockResolvedValue({
         code: 0,
         stdout: '\x1b[32m{"action": "execute", "task_id": "build-backend"}\x1b[0m\n',
         stderr: ''
@@ -41,7 +41,7 @@ describe('KiroWrapper', () => {
     
     test('should handle multi-line output with ANSI codes', async () => {
       // Simulate formatted LLM response with colors
-      wrapper.executeCommand = jest.fn().mockResolvedValue({
+      wrapper.executeCommandWithStreaming = jest.fn().mockResolvedValue({
         code: 0,
         stdout: '\x1b[1m\x1b[36m현재 실행 중인 태스크:\x1b[0m\n\x1b[32m- build-backend\x1b[0m\n\x1b[33m- test-frontend\x1b[0m\n',
         stderr: ''
@@ -57,7 +57,7 @@ describe('KiroWrapper', () => {
     });
     
     test('should handle plain text output without ANSI codes', async () => {
-      wrapper.executeCommand = jest.fn().mockResolvedValue({
+      wrapper.executeCommandWithStreaming = jest.fn().mockResolvedValue({
         code: 0,
         stdout: '태스크가 성공적으로 완료되었습니다.\n',
         stderr: ''
@@ -75,7 +75,7 @@ describe('KiroWrapper', () => {
       };
       
       wrapper = new KiroWrapper(mockWorkspaceService);
-      wrapper.executeCommand = jest.fn().mockResolvedValue({
+      wrapper.executeCommandWithStreaming = jest.fn().mockResolvedValue({
         code: 0,
         stdout: 'OK\n',
         stderr: ''
@@ -84,7 +84,7 @@ describe('KiroWrapper', () => {
       await wrapper.chat('test');
       
       expect(mockWorkspaceService.getWorkdirForKiro).toHaveBeenCalled();
-      expect(wrapper.executeCommand).toHaveBeenCalledWith(
+      expect(wrapper.executeCommandWithStreaming).toHaveBeenCalledWith(
         expect.objectContaining({
           workdir: '/test/workspace'
         })
@@ -92,13 +92,35 @@ describe('KiroWrapper', () => {
     });
     
     test('should handle kiro-cli errors', async () => {
-      wrapper.executeCommand = jest.fn().mockResolvedValue({
+      wrapper.executeCommandWithStreaming = jest.fn().mockResolvedValue({
         code: 1,
         stdout: '',
         stderr: 'Error: Command not found'
       });
       
       await expect(wrapper.chat('test')).rejects.toThrow('Error: Command not found');
+    });
+    
+    test('should call onProgress callback with streaming output', async () => {
+      const onProgress = jest.fn();
+      
+      wrapper.executeCommandWithStreaming = jest.fn().mockImplementation(async ({ onProgress: callback }) => {
+        // Simulate streaming output
+        if (callback) {
+          callback('First line');
+          callback('Second line');
+        }
+        return {
+          code: 0,
+          stdout: 'First line\nSecond line\n',
+          stderr: ''
+        };
+      });
+      
+      await wrapper.chat('test', {}, onProgress);
+      
+      expect(onProgress).toHaveBeenCalledWith('First line');
+      expect(onProgress).toHaveBeenCalledWith('Second line');
     });
   });
   
@@ -251,7 +273,7 @@ describe('KiroWrapper', () => {
     
     test('should add --resume flag to kiro-cli command', async () => {
       const wrapper = new KiroWrapper();
-      wrapper.executeCommand = jest.fn().mockResolvedValue({
+      wrapper.executeCommandWithStreaming = jest.fn().mockResolvedValue({
         code: 0,
         stdout: 'Response\n',
         stderr: ''
@@ -259,7 +281,7 @@ describe('KiroWrapper', () => {
       
       await wrapper.chat('test message');
       
-      expect(wrapper.executeCommand).toHaveBeenCalledWith(
+      expect(wrapper.executeCommandWithStreaming).toHaveBeenCalledWith(
         expect.objectContaining({
           command: expect.stringContaining('--resume')
         })
@@ -268,7 +290,7 @@ describe('KiroWrapper', () => {
     
     test('should parse context info and format response', async () => {
       const wrapper = new KiroWrapper();
-      wrapper.executeCommand = jest.fn().mockResolvedValue({
+      wrapper.executeCommandWithStreaming = jest.fn().mockResolvedValue({
         code: 0,
         stdout: 'Response text\n',
         stderr: 'Token usage: 5000/20000\n'
@@ -283,7 +305,7 @@ describe('KiroWrapper', () => {
     
     test('should handle response without context info', async () => {
       const wrapper = new KiroWrapper();
-      wrapper.executeCommand = jest.fn().mockResolvedValue({
+      wrapper.executeCommandWithStreaming = jest.fn().mockResolvedValue({
         code: 0,
         stdout: 'Response text\n',
         stderr: ''

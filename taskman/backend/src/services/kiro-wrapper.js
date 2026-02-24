@@ -11,6 +11,41 @@ const logger = pino({
   }
 });
 
+function getLogFilePath(workdir) {
+  const logsDir = path.join(workdir, '.taskman', 'logs');
+  
+  // Ensure logs directory exists
+  if (!fs.existsSync(logsDir)) {
+    fs.mkdirSync(logsDir, { recursive: true });
+  }
+  
+  // Create log file name with date (YYYY-MM-DD)
+  const date = new Date().toISOString().split('T')[0];
+  return path.join(logsDir, `chat-${date}.log`);
+}
+
+function appendToLog(workdir, entry) {
+  try {
+    const logsDir = path.join(workdir, '.taskman', 'logs');
+    
+    // Ensure logs directory exists
+    if (!fs.existsSync(logsDir)) {
+      fs.mkdirSync(logsDir, { recursive: true });
+    }
+    
+    const logFile = getLogFilePath(workdir);
+    const timestamp = new Date().toISOString();
+    const logEntry = `\n${'='.repeat(80)}\n[${timestamp}]\n${entry}\n`;
+    
+    fs.appendFileSync(logFile, logEntry, 'utf8');
+  } catch (error) {
+    // Silently fail in test environments or when path is invalid
+    if (process.env.NODE_ENV !== 'test') {
+      logger.debug(`Failed to write to log file: ${error?.message}`);
+    }
+  }
+}
+
 class KiroWrapper {
   constructor(workspaceService = null) {
     this.workspaceService = workspaceService;
@@ -49,7 +84,7 @@ class KiroWrapper {
     });
   }
   
-  async chat(message, context = {}) {
+  async chat(message, context = {}, onProgress = null) {
     logger.debug(`kiro-wrapper/chat:: Received message: ${message}`);
     logger.debug(`kiro-wrapper/chat:: Context: ${JSON.stringify(context, null, 2)}`);
     
@@ -60,10 +95,15 @@ class KiroWrapper {
       logger.debug(`kiro-wrapper/chat:: Using workspace: ${workdir}`);
     }
     
+    // Log user message
+    appendToLog(workdir, `USER:\n${message}`);
+    
     // Handle !bye command
     if (message.trim() === '!bye' || message.trim() === 'bye') {
       await this.clearSession(workdir);
-      return '세션이 종료되었습니다. 다음 대화는 새로운 세션으로 시작됩니다.';
+      const response = '세션이 종료되었습니다. 다음 대화는 새로운 세션으로 시작됩니다.';
+      appendToLog(workdir, `ASSISTANT:\n${response}`);
+      return response;
     }
     
     // Build context string for Kiro
@@ -93,10 +133,11 @@ Respond in Korean for explanations, but use the JSON format for execution reques
     try {
       logger.debug('kiro-wrapper/chat:: Calling kiro-cli...');
       
-      const result = await this.executeCommand({
+      const result = await this.executeCommandWithStreaming({
         command: `kiro-cli chat --no-interactive --trust-all-tools --resume -v '${escapedPrompt}'`,
         workdir: workdir,
-        timeout: 60
+        timeout: 60,
+        onProgress: onProgress
       });
       
       if (result.code === 0) {
@@ -115,15 +156,87 @@ Respond in Korean for explanations, but use the JSON format for execution reques
         const contextInfo = this.parseContextInfo(result.stdout + result.stderr);
         
         // Format response with workspace and context info
-        return this.formatResponse(filteredOutput, contextInfo, workdir);
+        const finalResponse = this.formatResponse(filteredOutput, contextInfo, workdir);
+        
+        // Log assistant response
+        appendToLog(workdir, `ASSISTANT:\n${finalResponse}`);
+        
+        return finalResponse;
       } else {
         logger.error(`kiro-wrapper/chat:: Kiro CLI failed with stderr: ${result.stderr}`);
-        throw new Error(result.stderr || 'Kiro CLI failed');
+        const errorMsg = result.stderr || 'Kiro CLI failed';
+        appendToLog(workdir, `ERROR:\n${errorMsg}`);
+        throw new Error(errorMsg);
       }
     } catch (error) {
       logger.error(`kiro-wrapper/chat:: Error: ${error?.message}`);
+      appendToLog(workdir, `ERROR:\n${error?.message}`);
       throw new Error(`Kiro CLI error: ${error?.message}`);
     }
+  }
+  
+  async executeCommandWithStreaming({ command, workdir, timeout = 1800, onProgress = null }) {
+    logger.debug(`kiro-wrapper/executeCommandWithStreaming:: Running command: ${command}`);
+    
+    return new Promise((resolve, reject) => {
+      const childProcess = spawn('sh', ['-c', command], {
+        cwd: workdir,
+        env: { ...process.env },
+        timeout: timeout * 1000
+      });
+      
+      let stdout = '';
+      let stderr = '';
+      let buffer = '';
+      
+      childProcess.stdout.on('data', (data) => {
+        const chunk = data.toString();
+        stdout += chunk;
+        buffer += chunk;
+        
+        // Send progress updates if callback provided
+        if (onProgress) {
+          // Split by newlines and send complete lines
+          const lines = buffer.split('\n');
+          // Keep the last incomplete line in buffer
+          buffer = lines.pop() || '';
+          
+          for (const line of lines) {
+            if (line.trim()) {
+              const cleanLine = stripAnsi(line);
+              // Filter out noise
+              if (!cleanLine.includes('picking up where we left off') &&
+                  !cleanLine.includes('Resuming session')) {
+                onProgress(cleanLine);
+              }
+            }
+          }
+        }
+      });
+      
+      childProcess.stderr.on('data', (data) => {
+        stderr += data.toString();
+      });
+      
+      childProcess.on('close', (code) => {
+        // Send any remaining buffer content
+        if (onProgress && buffer.trim()) {
+          const cleanLine = stripAnsi(buffer);
+          if (!cleanLine.includes('picking up where we left off') &&
+              !cleanLine.includes('Resuming session')) {
+            onProgress(cleanLine);
+          }
+        }
+        
+        logger.debug(`kiro-wrapper/executeCommandWithStreaming:: Command exited with code ${code}`);
+        resolve({ code, stdout, stderr });
+      });
+      
+      childProcess.on('error', (error) => {
+        logger.error(`kiro-wrapper/executeCommandWithStreaming:: Command error: ${error?.message}`);
+        reject(error);
+      });
+    });
   }
   
   parseContextInfo(output) {
