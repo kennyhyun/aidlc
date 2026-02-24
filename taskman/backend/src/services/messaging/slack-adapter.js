@@ -70,10 +70,24 @@ class SlackAdapter extends MessagingAdapter {
           });
         }
         
-        await this.app.client.chat.postMessage({
-          channel: channelId,
-          blocks
-        });
+        try {
+          await this.app.client.chat.postMessage({
+            channel: channelId,
+            blocks
+          });
+        } catch (error) {
+          logger.error({ err: error, chunkLength: chunk.length }, 'Failed to send message chunk');
+          // If still too long, truncate and retry
+          if (error.data?.error === 'msg_too_long' || (error.message && error.message.includes('too long'))) {
+            const truncated = chunk.substring(0, MAX_LENGTH - 100) + '\n\n... (메시지가 잘렸습니다)';
+            await this.app.client.chat.postMessage({
+              channel: channelId,
+              text: truncated
+            });
+          } else {
+            throw error;
+          }
+        }
       }
       return;
     }
@@ -102,11 +116,21 @@ class SlackAdapter extends MessagingAdapter {
       });
     }
     
-    return this.app.client.chat.postMessage({
-      channel: channelId || this.defaultChannelId,
-      text,
-      blocks
-    });
+    try {
+      return await this.app.client.chat.postMessage({
+        channel: channelId || this.defaultChannelId,
+        text,
+        blocks
+      });
+    } catch (error) {
+      logger.error({ err: error, textLength: text.length }, 'Failed to send message');
+      // If message too long, split and retry
+      if (error.data?.error === 'msg_too_long' || (error.message && error.message.includes('too long'))) {
+        logger.info('Message too long, splitting and retrying...');
+        return await this.sendMessage(channelId, text, options);
+      }
+      throw error;
+    }
   }
   
   async sendTyping(channelId) {

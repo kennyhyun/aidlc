@@ -94,7 +94,7 @@ Respond in Korean for explanations, but use the JSON format for execution reques
       logger.debug('kiro-wrapper/chat:: Calling kiro-cli...');
       
       const result = await this.executeCommand({
-        command: `kiro-cli chat --no-interactive --trust-all-tools --resume '${escapedPrompt}'`,
+        command: `kiro-cli chat --no-interactive --trust-all-tools --resume -v '${escapedPrompt}'`,
         workdir: workdir,
         timeout: 60
       });

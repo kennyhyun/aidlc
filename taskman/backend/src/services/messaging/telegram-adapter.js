@@ -59,7 +59,18 @@ class TelegramAdapter extends MessagingAdapter {
           };
         }
         
-        await this.bot.sendMessage(chatId, chunk, opts);
+        try {
+          await this.bot.sendMessage(chatId, chunk, opts);
+        } catch (error) {
+          logger.error({ err: error, chunkLength: chunk.length }, 'Failed to send message chunk');
+          // If still too long, truncate and retry
+          if (error.response?.body?.error_code === 400 && error.response?.body?.description?.includes('too long')) {
+            const truncated = chunk.substring(0, MAX_LENGTH - 100) + '\n\n... (메시지가 잘렸습니다)';
+            await this.bot.sendMessage(chatId, truncated, opts);
+          } else {
+            throw error;
+          }
+        }
       }
       return;
     }
@@ -77,7 +88,17 @@ class TelegramAdapter extends MessagingAdapter {
       };
     }
     
-    return this.bot.sendMessage(chatId || this.defaultChatId, text, opts);
+    try {
+      return await this.bot.sendMessage(chatId || this.defaultChatId, text, opts);
+    } catch (error) {
+      logger.error({ err: error, textLength: text.length }, 'Failed to send message');
+      // If message too long, split and retry
+      if (error.response?.body?.error_code === 400 && error.response?.body?.description?.includes('too long')) {
+        logger.info('Message too long, splitting and retrying...');
+        return await this.sendMessage(chatId, text, options);
+      }
+      throw error;
+    }
   }
   
   async sendTyping(chatId) {
