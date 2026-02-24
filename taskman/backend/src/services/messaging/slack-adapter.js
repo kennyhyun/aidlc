@@ -37,6 +37,47 @@ class SlackAdapter extends MessagingAdapter {
   
   async sendMessage(channelId, text, options = {}) {
     const { buttons } = options;
+    const MAX_LENGTH = 3000; // Slack text block limit is ~3000 chars
+    
+    // Split message if too long
+    if (text.length > MAX_LENGTH) {
+      const chunks = this.splitMessage(text, MAX_LENGTH);
+      for (let i = 0; i < chunks.length; i++) {
+        const chunk = chunks[i];
+        const isLast = i === chunks.length - 1;
+        const blocks = [
+          {
+            type: 'section',
+            text: {
+              type: 'mrkdwn',
+              text: chunk
+            }
+          }
+        ];
+        
+        // Only add buttons to the last chunk
+        if (isLast && buttons && buttons.length > 0) {
+          blocks.push({
+            type: 'actions',
+            elements: buttons.map(btn => ({
+              type: 'button',
+              text: {
+                type: 'plain_text',
+                text: btn.text
+              },
+              action_id: `${btn.action}:${btn.data}`
+            }))
+          });
+        }
+        
+        await this.app.client.chat.postMessage({
+          channel: channelId,
+          blocks
+        });
+      }
+      return;
+    }
+    
     const blocks = [
       {
         type: 'section',

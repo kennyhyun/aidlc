@@ -37,6 +37,33 @@ class TelegramAdapter extends MessagingAdapter {
   
   async sendMessage(chatId, text, options = {}) {
     const { buttons } = options;
+    const MAX_LENGTH = 4096;
+    
+    // Split message if too long
+    if (text.length > MAX_LENGTH) {
+      const chunks = this.splitMessage(text, MAX_LENGTH);
+      for (let i = 0; i < chunks.length; i++) {
+        const chunk = chunks[i];
+        const isLast = i === chunks.length - 1;
+        const opts = {};
+        
+        // Only add buttons to the last chunk
+        if (isLast && buttons && buttons.length > 0) {
+          opts.reply_markup = {
+            inline_keyboard: [
+              buttons.map(btn => ({
+                text: btn.text,
+                callback_data: `${btn.action}:${btn.data}`
+              }))
+            ]
+          };
+        }
+        
+        await this.bot.sendMessage(chatId, chunk, opts);
+      }
+      return;
+    }
+    
     const opts = {};
     
     if (buttons && buttons.length > 0) {

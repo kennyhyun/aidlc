@@ -87,6 +87,10 @@ fastify.addHook('onReady', async () => {
     // Set workspace service before initializing messaging
     messagingService.setWorkspaceService(workspaceService);
     
+    // Create KiroWrapper instance and set it in messaging service
+    const kiroWrapper = new KiroWrapper(workspaceService);
+    messagingService.setKiroWrapper(kiroWrapper);
+    
     await messagingService.initialize(config.messaging);
     fastify.log.info(`Messaging service initialized with ${config.messaging.platform}`);
     
@@ -185,45 +189,20 @@ fastify.addHook('onReady', async () => {
         fastify.log.error(`Error in message handler: ${error?.message}`);
         fastify.log.error(`Stack: ${error?.stack}`);
         
-        // Fallback to simple keyword matching
-        if (text.includes('상태') || text.includes('status')) {
-          if (running.length === 0) {
-            await messagingService.sendMessage(chatId, '✅ 실행 중인 태스크가 없습니다.');
-          } else {
-            const status = running.map(t => 
-              `⏳ ${t.task_name} (${t.task_id})\n   시작: ${t.started_at}`
-            ).join('\n\n');
-            await messagingService.sendMessage(chatId, `📊 실행 중인 태스크:\n\n${status}`);
-          }
-        } else if (text.includes('목록') || text.includes('list')) {
-          const list = tasks.map(t => `• ${t.name} (${t.id})`).join('\n');
-          await messagingService.sendMessage(chatId, `📋 사용 가능한 태스크:\n\n${list}`);
-        } else if (text.includes('실행') || text.includes('run')) {
-          const taskName = text.replace(/실행|run/gi, '').trim();
-          const task = tasks.find(t => 
-            t.name.toLowerCase().includes(taskName.toLowerCase()) ||
-            t.id.includes(taskName)
-          );
-          
-          if (task) {
-            try {
-              const result = await taskManager.executeTask(task.id, 'telegram');
-              await messagingService.sendMessage(
-                chatId,
-                `▶️ 태스크 시작: ${task.name}\n실행 ID: ${result.id}`
-              );
-            } catch (error) {
-              await messagingService.sendMessage(chatId, `❌ 오류: ${error?.message}`);
-            }
-          } else {
-            await messagingService.sendMessage(chatId, '❓ 태스크를 찾을 수 없습니다.');
-          }
-        } else {
+        // Only use fallback for command-like messages (starting with !)
+        if (text.startsWith('!')) {
           await messagingService.sendMessage(
             chatId,
-            `❌ LLM 처리 실패: ${error?.message}\n\n사용 가능한 명령:\n• "상태" - 실행 중인 태스크 확인\n• "목록" - 태스크 목록\n• "실행 [태스크명]" - 태스크 실행\n• /help - 도움말`
+            `❌ 명령 처리 실패: ${error?.message}\n\n!help를 입력하여 사용 가능한 명령을 확인하세요.`
           );
+          return;
         }
+        
+        // For natural language, provide helpful error message
+        await messagingService.sendMessage(
+          chatId,
+          `❌ 요청 처리 중 오류가 발생했습니다.\n\n오류: ${error?.message}\n\n명령어를 사용하려면 !help를 입력하세요.`
+        );
       }
     });
   } else {

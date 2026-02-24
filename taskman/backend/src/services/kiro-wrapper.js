@@ -61,7 +61,7 @@ class KiroWrapper {
     }
     
     // Handle !bye command
-    if (message.trim() === '!bye') {
+    if (message.trim() === '!bye' || message.trim() === 'bye') {
       await this.clearSession(workdir);
       return '세션이 종료되었습니다. 다음 대화는 새로운 세션으로 시작됩니다.';
     }
@@ -103,11 +103,19 @@ Respond in Korean for explanations, but use the JSON format for execution reques
         const cleanOutput = stripAnsi(result.stdout.trim());
         logger.debug(`kiro-wrapper/chat:: Response: ${cleanOutput}`);
         
+        // Filter out session resumption messages
+        const filteredOutput = cleanOutput
+          .split('\n')
+          .filter(line => !line.includes('picking up where we left off'))
+          .filter(line => !line.includes('Resuming session'))
+          .join('\n')
+          .trim();
+        
         // Parse context info from stdout and stderr
         const contextInfo = this.parseContextInfo(result.stdout + result.stderr);
         
         // Format response with workspace and context info
-        return this.formatResponse(cleanOutput, contextInfo, workdir);
+        return this.formatResponse(filteredOutput, contextInfo, workdir);
       } else {
         logger.error(`kiro-wrapper/chat:: Kiro CLI failed with stderr: ${result.stderr}`);
         throw new Error(result.stderr || 'Kiro CLI failed');
@@ -162,6 +170,16 @@ Respond in Korean for explanations, but use the JSON format for execution reques
     } catch (error) {
       logger.error(`Failed to clear session: ${error.message}`);
     }
+  }
+
+  async clearSessionForCurrentWorkspace() {
+    let workdir = process.cwd();
+    if (this.workspaceService) {
+      workdir = this.workspaceService.getWorkdirForKiro();
+    }
+    
+    await this.clearSession(workdir);
+    return `✅ 세션이 종료되었습니다.\n워크스페이스: ${workdir}\n\n다음 대화는 새로운 세션으로 시작됩니다.`;
   }
 }
 

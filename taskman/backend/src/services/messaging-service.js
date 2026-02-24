@@ -9,6 +9,7 @@ class MessagingService {
     this.messageHandler = null;
     this.buttonHandler = null;
     this.workspaceService = null;
+    this.kiroWrapper = null;
   }
   
   async initialize(config) {
@@ -129,6 +130,8 @@ class MessagingService {
           return await this.cmdReport(chatId);
         case 'workspace':
           return await this.cmdWorkspace(chatId, args);
+        case 'bye':
+          return await this.cmdBye(chatId);
         case 'help':
           return await this.cmdHelp(chatId);
         default:
@@ -192,6 +195,25 @@ class MessagingService {
     await this.adapter.sendMessage(chatId, report);
   }
   
+  async cmdBye(chatId) {
+    if (!this.kiroWrapper) {
+      return await this.adapter.sendMessage(
+        chatId,
+        '❌ Kiro service not available'
+      );
+    }
+    
+    try {
+      const response = await this.kiroWrapper.clearSessionForCurrentWorkspace();
+      await this.adapter.sendMessage(chatId, response);
+    } catch (error) {
+      await this.adapter.sendMessage(
+        chatId,
+        `❌ Error clearing session: ${error?.message}`
+      );
+    }
+  }
+
   async cmdHelp(chatId) {
     const prefix = this.platform === 'slack' ? '!' : '/';
     const help = `
@@ -208,6 +230,7 @@ ${prefix}workspace <path> - Switch workspace
 ${prefix}workspace list - List recent workspaces
 ${prefix}workspace default - Switch to default workspace
 ${prefix}workspace default <path> - Set default workspace
+${prefix}bye - Clear Kiro session
 ${prefix}help - Show this help message
 
 You can also use natural language:
@@ -371,6 +394,9 @@ You can also use natural language:
 
   setWorkspaceService(workspaceService) {
     this.workspaceService = workspaceService;
+  }
+  setKiroWrapper(kiroWrapper) {
+    this.kiroWrapper = kiroWrapper;
   }
   
   // Notification methods
