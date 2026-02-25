@@ -148,18 +148,16 @@ fastify.addHook('onReady', async () => {
         
         fastify.log.debug('Calling Kiro CLI chat with streaming...');
         
-        // Track if we've sent the first message
-        let firstUpdate = true;
+        // Track accumulated output
+        let accumulatedOutput = '';
         
         const response = await kiro.chat(text, context, async (progressLine) => {
           try {
-            if (firstUpdate && typingMessage?.update) {
-              // Replace typing indicator with first real output
-              await typingMessage.update(progressLine);
-              firstUpdate = false;
-            } else if (!firstUpdate) {
-              // Send subsequent updates as new messages
-              await messagingService.sendMessage(chatId, progressLine);
+            if (typingMessage?.update) {
+              // Accumulate all output
+              accumulatedOutput += (accumulatedOutput ? '\n' : '') + progressLine;
+              // Update the same message (throttler will batch these)
+              await typingMessage.update(accumulatedOutput);
             }
           } catch (err) {
             fastify.log.error(`Error sending progress update: ${err?.message}`);
@@ -167,6 +165,11 @@ fastify.addHook('onReady', async () => {
         });
         
         fastify.log.debug(`Got final response from Kiro CLI (${response.length} chars)`);
+        
+        // Flush any pending throttled updates
+        if (typingMessage?.flush) {
+          await typingMessage.flush();
+        }
         
         // Check if response is a JSON action
         try {
@@ -179,8 +182,13 @@ fastify.addHook('onReady', async () => {
               const result = await taskManager.executeTask(action.task_id, 'telegram');
               const message = `▶️ 태스크 시작: ${action.task_id}\n실행 ID: ${result.id}`;
               
-              // Send as new message (typing already replaced by progress updates)
-              await messagingService.sendMessage(chatId, message);
+              // Update the typing message with final result
+              if (typingMessage?.update) {
+                await typingMessage.update(message);
+                await typingMessage.flush();
+              } else {
+                await messagingService.sendMessage(chatId, message);
+              }
               
               fastify.log.info('Task execution initiated');
               return;
@@ -190,10 +198,11 @@ fastify.addHook('onReady', async () => {
           fastify.log.debug('Response is not a JSON action, sending as text');
         }
         
-        // If we haven't sent any updates yet, send the final response
-        if (firstUpdate && typingMessage?.update) {
+        // Update with final response if no progress was sent
+        if (!accumulatedOutput && typingMessage?.update) {
           await typingMessage.update(response);
-        } else if (firstUpdate) {
+          await typingMessage.flush();
+        } else if (!accumulatedOutput) {
           await messagingService.sendMessage(chatId, response);
         }
         // Otherwise, progress updates already sent everything

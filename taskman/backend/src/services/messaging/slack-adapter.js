@@ -1,5 +1,6 @@
 const { App } = require('@slack/bolt');
 const MessagingAdapter = require('./adapter');
+const MessageThrottler = require('../../utils/message-throttler');
 const logger = require('pino')({ level: process.env.LOG_LEVEL || 'info' });
 
 class SlackAdapter extends MessagingAdapter {
@@ -141,12 +142,9 @@ class SlackAdapter extends MessagingAdapter {
       text: '⏳ Processing...'
     });
     
-    // Return message info so it can be updated/deleted later
-    return {
-      channel: result.channel,
-      ts: result.ts,
-      update: async (text, options = {}) => {
-        const { buttons } = options;
+    // Create throttler for this message
+    const throttler = new MessageThrottler(
+      async (text) => {
         const blocks = [
           {
             type: 'section',
@@ -157,32 +155,38 @@ class SlackAdapter extends MessagingAdapter {
           }
         ];
         
-        if (buttons && buttons.length > 0) {
-          blocks.push({
-            type: 'actions',
-            elements: buttons.map(btn => ({
-              type: 'button',
-              text: {
-                type: 'plain_text',
-                text: btn.text
-              },
-              action_id: `${btn.action}:${btn.data}`
-            }))
+        try {
+          await this.app.client.chat.update({
+            channel: result.channel,
+            ts: result.ts,
+            text,
+            blocks
           });
+        } catch (error) {
+          logger.error({ err: error }, 'Failed to update message');
         }
-        
-        return this.app.client.chat.update({
-          channel: result.channel,
-          ts: result.ts,
-          text,
-          blocks
-        });
+      },
+      {
+        interval: 2000  // 2 seconds between updates
+      }
+    );
+    
+    // Return message info so it can be updated/deleted later
+    return {
+      channel: result.channel,
+      ts: result.ts,
+      update: async (text, options = {}) => {
+        throttler.add(text);
       },
       delete: async () => {
+        throttler.clear();
         return this.app.client.chat.delete({
           channel: result.channel,
           ts: result.ts
         });
+      },
+      flush: async () => {
+        throttler.flush();
       }
     };
   }
