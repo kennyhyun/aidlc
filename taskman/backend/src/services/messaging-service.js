@@ -109,25 +109,41 @@ class MessagingService {
     // 3. Natural language - use Kiro for processing
     if (this.kiroWrapper) {
       try {
-        // Send typing indicator
-        this.sendTyping(chatId);
+        // Send initial typing indicator
+        const typingMsg = await this.sendTyping(chatId);
         
         // Build context
         const context = {
           // Add any necessary context here
         };
         
+        let accumulatedOutput = '';
+        
         // Send to Kiro for processing
         const response = await this.kiroWrapper.chat(
           text,
           context,
           (chunk) => {
-            this.sendTyping(chatId);
+            // Accumulate output and update message
+            accumulatedOutput += (accumulatedOutput ? '\n' : '') + chunk;
+            if (typingMsg?.update) {
+              typingMsg.update(accumulatedOutput);
+            }
           },
           chatId
         );
         
-        return await this.adapter.sendMessage(chatId, response);
+        // Flush any pending updates
+        if (typingMsg?.flush) {
+          await typingMsg.flush();
+        }
+        
+        // Send final response if no progress was shown
+        if (!accumulatedOutput) {
+          return await this.adapter.sendMessage(chatId, response);
+        }
+        
+        return;
       } catch (error) {
         return await this.adapter.sendMessage(
           chatId,

@@ -84,16 +84,11 @@ fastify.addHook('onReady', async () => {
   if (hasMessagingConfig) {
     fastify.log.debug('Initializing messaging service...');
     
-    // Set workspace service before initializing messaging
-    messagingService.setWorkspaceService(workspaceService);
-    
-    // Create KiroWrapper instance and set it in messaging service
-    const kiroWrapper = new KiroWrapper(workspaceService);
-    messagingService.setKiroWrapper(kiroWrapper);
-    
     await messagingService.initialize({
       ...config.messaging,
-      database: db
+      database: db,
+      taskManager: taskManager,
+      workspaceService: workspaceService
     });
     fastify.log.info(`Messaging service initialized with ${config.messaging.platform}`);
     
