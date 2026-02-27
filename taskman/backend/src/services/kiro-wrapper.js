@@ -47,8 +47,9 @@ function appendToLog(workdir, entry) {
 }
 
 class KiroWrapper {
-  constructor(workspaceService = null) {
+  constructor(workspaceService = null, database = null) {
     this.workspaceService = workspaceService;
+    this.database = database;
   }
 
   async executeCommand({ command, workdir, timeout = 1800 }) {
@@ -84,7 +85,7 @@ class KiroWrapper {
     });
   }
   
-  async chat(message, context = {}, onProgress = null) {
+  async chat(message, context = {}, onProgress = null, chatId = null) {
     logger.debug(`kiro-wrapper/chat:: Received message: ${message}`);
     logger.debug(`kiro-wrapper/chat:: Context: ${JSON.stringify(context, null, 2)}`);
     
@@ -100,7 +101,7 @@ class KiroWrapper {
     
     // Handle !bye command
     if (message.trim() === '!bye' || message.trim() === 'bye') {
-      await this.clearSession(workdir);
+      await this.clearSession(workdir, chatId);
       const response = '세션이 종료되었습니다. 다음 대화는 새로운 세션으로 시작됩니다.';
       appendToLog(workdir, `ASSISTANT:\n${response}`);
       return response;
@@ -133,14 +134,28 @@ Respond in Korean for explanations, but use the JSON format for execution reques
     try {
       logger.debug('kiro-wrapper/chat:: Calling kiro-cli...');
       
+      // Check session state to determine if we should resume
+      let shouldResume = false;
+      if (this.database && chatId) {
+        const session = this.database.getChatSession(chatId);
+        shouldResume = session && session.session_active === 1;
+      }
+      
+      const resumeFlag = shouldResume ? '--resume' : '';
+      
       const result = await this.executeCommandWithStreaming({
-        command: `kiro-cli chat --no-interactive --trust-all-tools --resume -v '${escapedPrompt}'`,
+        command: `kiro-cli chat --no-interactive --trust-all-tools ${resumeFlag} -v '${escapedPrompt}'`,
         workdir: workdir,
         timeout: 60,
         onProgress: onProgress
       });
       
       if (result.code === 0) {
+        // Activate session after successful message
+        if (this.database && chatId) {
+          this.database.activateChatSession(chatId, workdir);
+        }
+        
         const cleanOutput = stripAnsi(result.stdout.trim());
         logger.debug(`kiro-wrapper/chat:: Response: ${cleanOutput}`);
         
@@ -264,11 +279,15 @@ Respond in Korean for explanations, but use the JSON format for execution reques
     return response;
   }
   
-  async clearSession(workdir) {
+  async clearSession(workdir, chatId = null) {
     const sessionPath = path.join(workdir, '.kiro', 'sessions');
     
     if (!fs.existsSync(sessionPath)) {
       logger.debug(`Session path does not exist: ${sessionPath}`);
+      // Still clear DB session if chatId provided
+      if (this.database && chatId) {
+        this.database.clearChatSession(chatId);
+      }
       return;
     }
     
@@ -279,19 +298,25 @@ Respond in Korean for explanations, but use the JSON format for execution reques
         fs.unlinkSync(filePath);
         logger.debug(`Deleted session file: ${filePath}`);
       }
+      
+      // Clear DB session
+      if (this.database && chatId) {
+        this.database.clearChatSession(chatId);
+      }
+      
       logger.info(`Cleared session for workdir: ${workdir}`);
     } catch (error) {
       logger.error(`Failed to clear session: ${error.message}`);
     }
   }
 
-  async clearSessionForCurrentWorkspace() {
+  async clearSessionForCurrentWorkspace(chatId = null) {
     let workdir = process.cwd();
     if (this.workspaceService) {
       workdir = this.workspaceService.getWorkdirForKiro();
     }
     
-    await this.clearSession(workdir);
+    await this.clearSession(workdir, chatId);
     return `✅ 세션이 종료되었습니다.\n워크스페이스: ${workdir}\n\n다음 대화는 새로운 세션으로 시작됩니다.`;
   }
 }

@@ -46,4 +46,46 @@ describe('Database', () => {
     expect(retrieved.task_id).toBe(execution.task_id);
     expect(retrieved.status).toBe('running');
   });
+  
+  describe('chat_sessions table', () => {
+    test('should create and retrieve chat session', () => {
+      db.upsertChatSession('chat123', '/test/workspace', true);
+      
+      const session = db.getChatSession('chat123');
+      expect(session).toBeDefined();
+      expect(session.chat_id).toBe('chat123');
+      expect(session.workspace_path).toBe('/test/workspace');
+      expect(session.session_active).toBe(1);
+    });
+    
+    test('should update existing chat session', () => {
+      db.upsertChatSession('chat123', '/test/workspace', true);
+      db.upsertChatSession('chat123', '/new/workspace', false);
+      
+      const session = db.getChatSession('chat123');
+      expect(session.workspace_path).toBe('/new/workspace');
+      expect(session.session_active).toBe(0);
+    });
+    
+    test('should clear chat session', () => {
+      db.upsertChatSession('chat123', '/test/workspace', true);
+      db.clearChatSession('chat123');
+      
+      const session = db.getChatSession('chat123');
+      expect(session.session_active).toBe(0);
+    });
+    
+    test('should activate chat session', () => {
+      db.upsertChatSession('chat123', '/test/workspace', false);
+      db.activateChatSession('chat123', '/test/workspace');
+      
+      const session = db.getChatSession('chat123');
+      expect(session.session_active).toBe(1);
+    });
+    
+    test('should return undefined for non-existent chat session', () => {
+      const session = db.getChatSession('nonexistent');
+      expect(session).toBeUndefined();
+    });
+  });
 });

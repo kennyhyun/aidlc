@@ -73,6 +73,15 @@ class DatabaseModel {
         last_accessed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         access_count INTEGER DEFAULT 1
       );
+      
+      CREATE TABLE IF NOT EXISTS chat_sessions (
+        chat_id TEXT PRIMARY KEY,
+        workspace_path TEXT NOT NULL,
+        session_active BOOLEAN DEFAULT 1,
+        last_message_at DATETIME,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
     `);
   }
   
@@ -84,6 +93,8 @@ class DatabaseModel {
         ON task_executions(status);
       CREATE INDEX IF NOT EXISTS idx_dag_executions_started_at 
         ON dag_executions(started_at);
+      CREATE INDEX IF NOT EXISTS idx_chat_sessions_workspace 
+        ON chat_sessions(workspace_path, session_active);
     `);
   }
   
@@ -186,6 +197,39 @@ class DatabaseModel {
       ORDER BY started_at DESC
     `);
     return stmt.all(date);
+  }
+  
+  getChatSession(chatId) {
+    const stmt = this.db.prepare('SELECT * FROM chat_sessions WHERE chat_id = ?');
+    return stmt.get(chatId);
+  }
+
+  upsertChatSession(chatId, workspacePath, sessionActive = true) {
+    const stmt = this.db.prepare(`
+      INSERT INTO chat_sessions (chat_id, workspace_path, session_active, last_message_at, updated_at)
+      VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      ON CONFLICT(chat_id) DO UPDATE SET
+        workspace_path = excluded.workspace_path,
+        session_active = excluded.session_active,
+        last_message_at = CURRENT_TIMESTAMP,
+        updated_at = CURRENT_TIMESTAMP
+    `);
+    
+    stmt.run(chatId, workspacePath, sessionActive ? 1 : 0);
+  }
+
+  clearChatSession(chatId) {
+    const stmt = this.db.prepare(`
+      UPDATE chat_sessions 
+      SET session_active = 0, updated_at = CURRENT_TIMESTAMP 
+      WHERE chat_id = ?
+    `);
+    
+    stmt.run(chatId);
+  }
+
+  activateChatSession(chatId, workspacePath) {
+    this.upsertChatSession(chatId, workspacePath, true);
   }
   
   async close() {

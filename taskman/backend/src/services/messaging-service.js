@@ -1,5 +1,6 @@
 const TelegramAdapter = require('./messaging/telegram-adapter');
 const SlackAdapter = require('./messaging/slack-adapter');
+const KiroWrapper = require('./kiro-wrapper');
 const logger = require('pino')({ level: process.env.LOG_LEVEL || 'info' });
 
 class MessagingService {
@@ -13,6 +14,10 @@ class MessagingService {
   }
   
   async initialize(config) {
+    this.taskManager = config.taskManager;
+    this.workspaceService = config.workspaceService;
+    this.database = config.database;
+    
     logger.debug('Initializing messaging service...');
     logger.debug(`Platform: ${config.platform}`);
     
@@ -51,6 +56,10 @@ class MessagingService {
     logger.debug('Starting adapter...');
     await this.adapter.start();
     logger.info('Messaging adapter started');
+    
+    // Initialize Kiro wrapper with workspace service and database
+    const kiroWrapper = new KiroWrapper(this.workspaceService, this.database);
+    this.setKiroWrapper(kiroWrapper);
     
     this.registerHandlers();
     logger.info('Messaging service initialized');
@@ -97,9 +106,38 @@ class MessagingService {
       return await this.handleCommand(chatId, text);
     }
     
-    // 3. Natural language - delegate to custom handler
+    // 3. Natural language - use Kiro for processing
+    if (this.kiroWrapper) {
+      try {
+        // Send typing indicator
+        this.sendTyping(chatId);
+        
+        // Build context
+        const context = {
+          // Add any necessary context here
+        };
+        
+        // Send to Kiro for processing
+        const response = await this.kiroWrapper.chat(
+          text,
+          context,
+          (chunk) => {
+            this.sendTyping(chatId);
+          },
+          chatId
+        );
+        
+        return await this.adapter.sendMessage(chatId, response);
+      } catch (error) {
+        return await this.adapter.sendMessage(
+          chatId,
+          `❌ Error: ${error?.message}`
+        );
+      }
+    }
+    
+    // Fallback to custom handler if set
     if (this.messageHandler) {
-      // Note: Custom handler is responsible for sending typing indicator
       return await this.messageHandler(chatId, text, userId);
     }
     
@@ -204,7 +242,7 @@ class MessagingService {
     }
     
     try {
-      const response = await this.kiroWrapper.clearSessionForCurrentWorkspace();
+      const response = await this.kiroWrapper.clearSessionForCurrentWorkspace(chatId);
       await this.adapter.sendMessage(chatId, response);
     } catch (error) {
       await this.adapter.sendMessage(

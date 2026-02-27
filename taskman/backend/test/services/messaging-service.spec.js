@@ -1,13 +1,16 @@
 const MessagingService = require('../../src/services/messaging-service');
 const TelegramAdapter = require('../../src/services/messaging/telegram-adapter');
 const SlackAdapter = require('../../src/services/messaging/slack-adapter');
+const KiroWrapper = require('../../src/services/kiro-wrapper');
 
 jest.mock('../../src/services/messaging/telegram-adapter');
 jest.mock('../../src/services/messaging/slack-adapter');
+jest.mock('../../src/services/kiro-wrapper');
 
 describe('MessagingService', () => {
   let service;
   let mockAdapter;
+  let mockKiroWrapper;
   const originalEnv = process.env.ALLOWED_USER_IDS;
   
   beforeEach(() => {
@@ -23,8 +26,14 @@ describe('MessagingService', () => {
       onButtonClick: jest.fn()
     };
     
+    mockKiroWrapper = {
+      chat: jest.fn().mockResolvedValue('Kiro response'),
+      clearSessionForCurrentWorkspace: jest.fn().mockResolvedValue('Session cleared')
+    };
+    
     TelegramAdapter.mockImplementation(() => mockAdapter);
     SlackAdapter.mockImplementation(() => mockAdapter);
+    KiroWrapper.mockImplementation(() => mockKiroWrapper);
     
     service = new MessagingService();
   });
@@ -112,12 +121,18 @@ describe('MessagingService', () => {
       const customHandler = jest.fn();
       service.onMessage(customHandler);
       
+      // Remove kiroWrapper to test custom handler fallback
+      service.kiroWrapper = null;
+      
       await service.handleMessage('123', 'Hello', 'user1');
       
       expect(customHandler).toHaveBeenCalledWith('123', 'Hello', 'user1');
     });
     
     test('should show default message if no custom handler', async () => {
+      // Remove kiroWrapper to test default message
+      service.kiroWrapper = null;
+      
       await service.handleMessage('123', 'Hello', 'user1');
       
       expect(mockAdapter.sendMessage).toHaveBeenCalledWith(

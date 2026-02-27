@@ -91,7 +91,10 @@ fastify.addHook('onReady', async () => {
     const kiroWrapper = new KiroWrapper(workspaceService);
     messagingService.setKiroWrapper(kiroWrapper);
     
-    await messagingService.initialize(config.messaging);
+    await messagingService.initialize({
+      ...config.messaging,
+      database: db
+    });
     fastify.log.info(`Messaging service initialized with ${config.messaging.platform}`);
     
     // Setup event listeners

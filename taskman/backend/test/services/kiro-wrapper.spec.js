@@ -256,31 +256,59 @@ describe('KiroWrapper', () => {
     });
   });
   
-  describe('chat with session management', () => {
-    test('should handle !bye command', async () => {
+  describe('chat with session state management', () => {
+    test('should not include --resume flag for new chat session', async () => {
+      const mockDb = {
+        getChatSession: jest.fn().mockReturnValue(null),
+        activateChatSession: jest.fn()
+      };
+      
       const mockWorkspaceService = {
         getWorkdirForKiro: jest.fn().mockReturnValue('/test/workspace')
       };
       
-      const wrapper = new KiroWrapper(mockWorkspaceService);
-      wrapper.clearSession = jest.fn().mockResolvedValue();
-      
-      const result = await wrapper.chat('!bye');
-      
-      expect(wrapper.clearSession).toHaveBeenCalledWith('/test/workspace');
-      expect(result).toContain('세션이 종료되었습니다');
-    });
-    
-    test('should add --resume flag to kiro-cli command', async () => {
-      const wrapper = new KiroWrapper();
+      const wrapper = new KiroWrapper(mockWorkspaceService, mockDb);
       wrapper.executeCommandWithStreaming = jest.fn().mockResolvedValue({
         code: 0,
-        stdout: 'Response\n',
+        stdout: 'test response',
         stderr: ''
       });
       
-      await wrapper.chat('test message');
+      await wrapper.chat('test message', {}, null, 'chat123');
       
+      expect(mockDb.getChatSession).toHaveBeenCalledWith('chat123');
+      expect(wrapper.executeCommandWithStreaming).toHaveBeenCalledWith(
+        expect.objectContaining({
+          command: expect.not.stringContaining('--resume')
+        })
+      );
+      expect(mockDb.activateChatSession).toHaveBeenCalledWith('chat123', '/test/workspace');
+    });
+    
+    test('should include --resume flag for active chat session', async () => {
+      const mockDb = {
+        getChatSession: jest.fn().mockReturnValue({
+          chat_id: 'chat123',
+          workspace_path: '/test/workspace',
+          session_active: 1
+        }),
+        activateChatSession: jest.fn()
+      };
+      
+      const mockWorkspaceService = {
+        getWorkdirForKiro: jest.fn().mockReturnValue('/test/workspace')
+      };
+      
+      const wrapper = new KiroWrapper(mockWorkspaceService, mockDb);
+      wrapper.executeCommandWithStreaming = jest.fn().mockResolvedValue({
+        code: 0,
+        stdout: 'test response',
+        stderr: ''
+      });
+      
+      await wrapper.chat('test message', {}, null, 'chat123');
+      
+      expect(mockDb.getChatSession).toHaveBeenCalledWith('chat123');
       expect(wrapper.executeCommandWithStreaming).toHaveBeenCalledWith(
         expect.objectContaining({
           command: expect.stringContaining('--resume')
@@ -288,34 +316,48 @@ describe('KiroWrapper', () => {
       );
     });
     
-    test('should parse context info and format response', async () => {
-      const wrapper = new KiroWrapper();
+    test('should not include --resume flag after bye command', async () => {
+      const mockDb = {
+        getChatSession: jest.fn().mockReturnValue({
+          chat_id: 'chat123',
+          workspace_path: '/test/workspace',
+          session_active: 0
+        }),
+        activateChatSession: jest.fn()
+      };
+      
+      const mockWorkspaceService = {
+        getWorkdirForKiro: jest.fn().mockReturnValue('/test/workspace')
+      };
+      
+      const wrapper = new KiroWrapper(mockWorkspaceService, mockDb);
       wrapper.executeCommandWithStreaming = jest.fn().mockResolvedValue({
         code: 0,
-        stdout: 'Response text\n',
-        stderr: 'Token usage: 5000/20000\n'
-      });
-      
-      const result = await wrapper.chat('test');
-      
-      expect(result).toContain('Response text');
-      expect(result).toContain('[워크스페이스:');
-      expect(result).toContain('[컨텍스트: 25% (5000/20000 토큰)]');
-    });
-    
-    test('should handle response without context info', async () => {
-      const wrapper = new KiroWrapper();
-      wrapper.executeCommandWithStreaming = jest.fn().mockResolvedValue({
-        code: 0,
-        stdout: 'Response text\n',
+        stdout: 'test response',
         stderr: ''
       });
       
-      const result = await wrapper.chat('test');
+      await wrapper.chat('test message', {}, null, 'chat123');
       
-      expect(result).toContain('Response text');
-      expect(result).toContain('[워크스페이스:');
-      expect(result).not.toContain('[컨텍스트:');
+      expect(wrapper.executeCommandWithStreaming).toHaveBeenCalledWith(
+        expect.objectContaining({
+          command: expect.not.stringContaining('--resume')
+        })
+      );
+    });
+    
+    test('should clear database session when clearing session', async () => {
+      const mockDb = {
+        clearChatSession: jest.fn()
+      };
+      
+      const wrapper = new KiroWrapper(null, mockDb);
+      
+      jest.spyOn(fs, 'existsSync').mockReturnValue(false);
+      
+      await wrapper.clearSession('/test/workspace', 'chat123');
+      
+      expect(mockDb.clearChatSession).toHaveBeenCalledWith('chat123');
     });
   });
 });
