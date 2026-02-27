@@ -12,30 +12,32 @@ const logger = pino({
 });
 
 function getLogFilePath(workdir) {
-  const logsDir = path.join(workdir, '.taskman', 'logs');
+  // Get backend root directory (taskman/backend)
+  const backendRoot = path.resolve(__dirname, '../..');
   
-  // Ensure logs directory exists
-  if (!fs.existsSync(logsDir)) {
-    fs.mkdirSync(logsDir, { recursive: true });
+  // Create date folder (yyyy-mm-dd)
+  const date = new Date().toISOString().split('T')[0];
+  const dateFolder = path.join(backendRoot, 'logs', date);
+  
+  // Ensure date folder exists
+  if (!fs.existsSync(dateFolder)) {
+    fs.mkdirSync(dateFolder, { recursive: true });
   }
   
-  // Create log file name with date (YYYY-MM-DD)
-  const date = new Date().toISOString().split('T')[0];
-  return path.join(logsDir, `chat-${date}.log`);
+  // Create workspace-specific log file name
+  // Convert workdir path to safe filename (replace / and \ with _)
+  const workspaceName = workdir
+    .replace(/[/\\:]/g, '_')
+    .replace(/^_+|_+$/g, ''); // Remove leading/trailing underscores
+  
+  return path.join(dateFolder, `${workspaceName}.log`);
 }
 
 function appendToLog(workdir, entry) {
   try {
-    const logsDir = path.join(workdir, '.taskman', 'logs');
-    
-    // Ensure logs directory exists
-    if (!fs.existsSync(logsDir)) {
-      fs.mkdirSync(logsDir, { recursive: true });
-    }
-    
     const logFile = getLogFilePath(workdir);
     const timestamp = new Date().toISOString();
-    const logEntry = `\n${'='.repeat(80)}\n[${timestamp}]\n${entry}\n`;
+    const logEntry = `\n${'='.repeat(80)}\n[${timestamp}] [${workdir}]\n${entry}\n`;
     
     fs.appendFileSync(logFile, logEntry, 'utf8');
   } catch (error) {
