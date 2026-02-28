@@ -138,11 +138,17 @@ class MessagingService {
           await typingMsg.flush();
         }
         
-        // Send final response if no progress was shown
-        if (!accumulatedOutput) {
+        // Send final response
+        // For platforms without live updates (like Telegram), send accumulated output or final response
+        if (accumulatedOutput && !typingMsg?.update) {
+          // Platform doesn't support live updates, send accumulated output
+          return await this.adapter.sendMessage(chatId, accumulatedOutput);
+        } else if (!accumulatedOutput) {
+          // No progress was shown, send final response
           return await this.adapter.sendMessage(chatId, response);
         }
         
+        // For platforms with live updates (like Slack), message was already updated
         return;
       } catch (error) {
         return await this.adapter.sendMessage(
